@@ -8,6 +8,29 @@ How Sofarr works and why it's built this way. For contributors; users want the
 One TV-friendly app to **browse → request → watch**. Sofarr plays video itself, using
 Plex as the stream source, so you never switch to another app.
 
+Without it, a typical Plex + *arr household picks something to watch somewhere else,
+requests it in Radarr/Sonarr (often from a phone), then switches to Plex on the TV to
+watch. The existing pieces each cover only part of that:
+
+- **Request apps** (Overseerr, Jellyseerr, Seerr) are good at browsing and requesting,
+  but don't play anything: "Play" sends you to Plex.
+- **Plex's Watchlist and Discover** can drive automatic downloads, but its suggestions
+  are mostly what's on its own rental and streaming partners, not recommendations based
+  on your library.
+
+### Principles
+
+- **One app all the way through.** Browsing, requesting and playback happen in Sofarr;
+  never hand off to the Plex app.
+- **Web first.** A browser UI that works on a TV, laptop or phone, built so its logic
+  can carry over to a native TV app later.
+- **One container.** Easy to self-host next to an existing stack; state in one SQLite file.
+- **Plex is the source of truth** for identity, profiles, library and watch state; the
+  *arr apps for what's wanted and downloading. Sofarr stores only what those don't
+  (sessions, request history).
+- **Secrets stay server-side,** and every upstream is a configurable URL, with no
+  assumptions about how the stack is networked.
+
 ## Components
 
 ```
