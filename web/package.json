@@ -1,0 +1,26 @@
+{
+  "name": "@sofarr/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "watch": "vite build --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"(web: no tests yet)\""
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "@noriginmedia/norigin-spatial-navigation": "^3.4.0",
+    "hls.js": "^1.7.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

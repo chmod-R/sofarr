@@ -1,0 +1,941 @@
+/* Sofarr — a 10-foot UI that also works on a laptop or phone.
+   Sizes are in rem and the root size scales with the viewport, so a 1080p TV,
+   a laptop and a phone all get sensible proportions. */
+
+:root {
+  --bg: #0e0f13;
+  --bg-raised: #191b22;
+  --bg-hover: #23262f;
+  --text: #f1f1f3;
+  --muted: #a3a6b1;
+  --accent: #f0a640; /* warm "sofa" amber */
+  --accent-ink: #1a1206;
+  --ok: #57c78a;
+  --info: #6aa8ff;
+  --warn: #e7c35a;
+  --focus: 0 0 0 0.2rem var(--bg), 0 0 0 0.4rem var(--accent);
+  --radius: 0.5rem;
+  --gutter: clamp(1rem, 4vw, 4rem);
+  --card-w: clamp(11rem, 19vw, 19rem);
+  color-scheme: dark;
+}
+
+html {
+  font-size: clamp(14px, 1.05vw, 28px);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+img {
+  display: block;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.85rem;
+}
+.error {
+  color: #ff8a80;
+}
+
+/* ---------- Brand ---------- */
+.brand {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-size: 1.6rem;
+  color: var(--accent);
+}
+.brand-large {
+  font-size: 3rem;
+  margin-bottom: 2rem;
+}
+
+/* ---------- Buttons & focus ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.btn.is-focused,
+.btn:focus-visible {
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--focus);
+  transform: scale(1.05);
+  outline: none;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary.is-focused {
+  background: #ffc46b;
+  color: var(--accent-ink);
+}
+.btn-quiet {
+  background: transparent;
+}
+.btn.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.pill {
+  padding: 0.15rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
+}
+.pill-owned {
+  background: rgba(87, 199, 138, 0.2);
+  color: var(--ok);
+}
+.pill-downloading {
+  background: rgba(106, 168, 255, 0.2);
+  color: var(--info);
+}
+.pill-requested,
+.pill-upcoming {
+  background: rgba(231, 195, 90, 0.18);
+  color: var(--warn);
+}
+.pill-available {
+  background: rgba(240, 166, 64, 0.2);
+  color: var(--accent);
+}
+
+/* ---------- Centered screens (sign-in, profiles, errors) ---------- */
+.center-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: var(--gutter);
+  text-align: center;
+}
+.screen-title {
+  font-size: 2.4rem;
+  font-weight: 700;
+}
+
+.signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 3rem;
+}
+.signin-steps p {
+  font-size: 1.3rem;
+}
+.signin-code {
+  margin: 1rem 0;
+  font-size: 4.5rem;
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  padding-left: 0.35em; /* balance the trailing letter-spacing */
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.signin-qr {
+  margin: 0;
+}
+.signin-qr img {
+  width: 12rem;
+  height: 12rem;
+  /* Plex's QR is white-on-transparent (made for dark UIs). Invert it to
+     black-on-white, which every phone camera reads. */
+  filter: invert(1);
+  background: #000; /* inverted → white */
+  padding: 0.6rem;
+  border-radius: var(--radius);
+}
+.signin-qr figcaption {
+  margin-top: 0.5rem;
+}
+.signin-problem {
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+}
+
+.profiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+  margin: 1rem 0 2rem;
+}
+.profile {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  border-radius: var(--radius);
+  padding: 0.5rem;
+  transition: transform 120ms ease;
+}
+.profile .avatar {
+  transition: box-shadow 120ms ease;
+}
+.profile.is-focused {
+  transform: scale(1.08);
+}
+.profile.is-focused .avatar {
+  box-shadow: var(--focus);
+}
+.profile-name {
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+.profile.is-focused .profile-name {
+  color: var(--text);
+}
+.footer-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.avatar {
+  border-radius: 0.6rem;
+  object-fit: cover;
+  background: var(--bg-raised);
+}
+.avatar-lg {
+  width: 8rem;
+  height: 8rem;
+}
+.avatar-sm {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 0.35rem;
+}
+.avatar-letter {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 3rem;
+  background: linear-gradient(135deg, #3a3f52, #23262f);
+}
+.avatar-sm.avatar-letter {
+  font-size: 1rem;
+}
+
+.pinpad {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+.pin-dots {
+  display: flex;
+  gap: 0.9rem;
+  margin: 0.5rem 0;
+}
+.pin-dots span {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+}
+.pin-dots span.on {
+  background: var(--text);
+  border-color: var(--text);
+}
+.pin-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 4.5rem);
+  gap: 0.75rem;
+}
+.pin-key {
+  justify-content: center;
+  height: 3.5rem;
+  font-size: 1.4rem;
+}
+
+/* ---------- Home ---------- */
+.home {
+  min-height: 100vh;
+}
+.header {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem var(--gutter);
+  background: linear-gradient(to bottom, rgba(14, 15, 19, 0.9), rgba(14, 15, 19, 0));
+}
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.header-profile {
+  padding-left: 0.6rem;
+}
+
+.hero {
+  position: relative;
+  height: 62vh;
+  min-height: 20rem;
+  overflow: hidden;
+}
+.hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  animation: fade 300ms ease;
+}
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(14, 15, 19, 0.95) 0%, rgba(14, 15, 19, 0.6) 40%, rgba(14, 15, 19, 0) 70%),
+    linear-gradient(to top, var(--bg) 0%, rgba(14, 15, 19, 0) 40%);
+}
+.hero-body {
+  position: absolute;
+  left: var(--gutter);
+  bottom: 2.5rem;
+  width: min(42rem, 80vw);
+}
+.hero-title {
+  font-size: clamp(2rem, 3.4vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.05;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin: 0.9rem 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+.hero-overview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 1.1rem;
+  color: #d6d7dc;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.rows {
+  position: relative;
+  margin-top: -1rem;
+  padding-bottom: 4rem;
+}
+.rows-loading,
+.warnings,
+.notice {
+  padding: 1rem var(--gutter);
+}
+.row {
+  margin-bottom: 1.6rem;
+  scroll-margin-top: 5rem;
+}
+.row-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 0 var(--gutter);
+  margin-bottom: 0.6rem;
+}
+.row-track {
+  display: flex;
+  gap: 0.8rem;
+  overflow-x: auto;
+  scroll-padding: 0 var(--gutter);
+  padding: 0.6rem var(--gutter) 0.9rem; /* room for the focus scale */
+  scrollbar-width: none;
+}
+.row-track::-webkit-scrollbar {
+  display: none;
+}
+
+.card {
+  position: relative;
+  flex: 0 0 var(--card-w);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-raised);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.card.is-focused {
+  transform: scale(1.07);
+  box-shadow: var(--focus), 0 0.8rem 2rem rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+.card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card-img-missing {
+  background: linear-gradient(135deg, #2a2d38, #191b22);
+}
+.card-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 55%);
+}
+.card-title {
+  position: absolute;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.65rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  display: grid;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.card-sub {
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: #d0d2d8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.25rem;
+  background: rgba(255, 255, 255, 0.25);
+}
+.card-progress > div {
+  height: 100%;
+}
+.card-progress.is-resume > div {
+  background: var(--accent);
+}
+.card-progress.is-download > div {
+  background: var(--info);
+}
+.badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+.badge-get {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 1rem;
+  line-height: 1.2;
+  padding: 0 0.45rem;
+}
+.badge-wait {
+  color: var(--warn);
+}
+.badge-dl {
+  color: var(--info);
+}
+
+/* ---------- Title page ---------- */
+.title-page {
+  position: relative;
+  min-height: 100vh;
+}
+.title-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.title-shade {
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(14, 15, 19, 0.97) 0%, rgba(14, 15, 19, 0.75) 45%, rgba(14, 15, 19, 0.15) 80%),
+    linear-gradient(to top, rgba(14, 15, 19, 0.9) 0%, rgba(14, 15, 19, 0) 50%);
+}
+.title-body {
+  position: relative;
+  padding: 18vh var(--gutter) 4rem;
+  max-width: 52rem;
+}
+.title-name {
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+.title-tagline {
+  margin-top: 0.5rem;
+  font-style: italic;
+  color: var(--muted);
+}
+.title-overview {
+  font-size: 1.1rem;
+  color: #d6d7dc;
+  max-width: 44rem;
+}
+.title-progress {
+  height: 0.4rem;
+  max-width: 24rem;
+  margin-bottom: 1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+.title-progress > div {
+  height: 100%;
+  background: var(--info);
+  transition: width 400ms ease;
+}
+.title-message {
+  margin-top: 1rem;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.seasons {
+  margin-top: 2.5rem;
+}
+.seasons h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.75rem;
+}
+.season-list {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 40rem;
+}
+.season {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+.season.is-focused {
+  background: var(--bg-hover);
+  box-shadow: var(--focus);
+}
+.season.is-on {
+  background: rgba(240, 166, 64, 0.16);
+}
+.season-check {
+  grid-row: span 2;
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+.season-owned .season-check {
+  color: var(--ok);
+}
+.season-name {
+  font-weight: 600;
+}
+
+/* ---------- Trailer overlay ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1.25rem;
+  background: rgba(0, 0, 0, 0.92);
+}
+.trailer {
+  width: min(90vw, calc(80vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Season rows with an Episodes toggle, and the episode list */
+.season-block {
+  display: grid;
+  gap: 0.35rem;
+}
+.season-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.season-expand {
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+.season-expand.is-open {
+  color: var(--accent);
+}
+.episodes {
+  margin: 0.2rem 0 0.8rem 2.2rem;
+}
+.episode-list {
+  display: grid;
+  gap: 0.25rem;
+}
+.episode {
+  padding: 0.45rem 0.8rem;
+}
+.episode .season-name {
+  font-weight: 500;
+}
+.episodes .actions {
+  margin-top: 0.8rem;
+}
+.episode-note {
+  margin: 0.3rem 0 0.6rem 2.2rem;
+}
+
+/* ---------- Player ---------- */
+.player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  cursor: none;
+}
+.player.show-controls {
+  cursor: default;
+}
+.player-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.player-top,
+.player-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 1.5rem var(--gutter);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+.player.show-controls .player-top,
+.player.show-controls .player-bottom {
+  opacity: 1;
+  pointer-events: auto;
+}
+.player-top {
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent);
+}
+.player-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.player-subtitle {
+  color: var(--muted);
+}
+.player-bottom {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+}
+.player-bar {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  overflow: hidden;
+}
+.player-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-top: 0.9rem;
+}
+.player-toggle {
+  font-size: 1.4rem;
+  min-width: 3rem;
+  justify-content: center;
+}
+.player-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.player-hint {
+  margin-left: auto;
+}
+.player-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: -1.75rem 0 0 -1.75rem;
+  border: 0.3rem solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.up-next {
+  position: absolute;
+  right: var(--gutter);
+  bottom: 7rem;
+  width: min(26rem, 80vw);
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  background: rgba(20, 21, 27, 0.92);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.6);
+}
+.up-next-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+}
+
+/* Episode watch state */
+.episode.is-watched .season-check {
+  color: var(--ok);
+}
+.episode.is-watched .season-name {
+  color: var(--muted);
+}
+.episode-progress {
+  grid-column: 2;
+  display: block;
+  height: 0.2rem;
+  margin-top: 0.35rem;
+  max-width: 14rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+.episode-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.season-owned .season-check {
+  color: var(--accent); /* ▶ in your library, not finished */
+}
+.season.is-watched .season-check {
+  color: var(--ok); /* ✓ all watched */
+}
+
+/* ---------- Search ---------- */
+.search {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(18rem, 26rem) 1fr;
+  gap: 2rem;
+  padding: 1.5rem var(--gutter) 3rem;
+}
+.search-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-self: start;
+  position: sticky;
+  top: 1.5rem;
+}
+.search-input {
+  width: 100%;
+  font: inherit;
+  font-size: 1.3rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.kbd {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.4rem;
+}
+.kbd-key {
+  justify-content: center;
+  padding: 0.55rem 0;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+}
+.kbd-wide {
+  grid-column: span 2;
+  font-size: 0.9rem;
+  text-transform: none;
+}
+.search-back {
+  align-self: flex-start;
+}
+.search-hint {
+  padding-top: 4.2rem;
+}
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+  gap: 1.1rem 0.9rem;
+  padding: 4rem 0.6rem 0;
+}
+.results-grid .card {
+  flex: none;
+}
+@media (max-width: 760px) {
+  .search {
+    grid-template-columns: 1fr;
+  }
+  .search-side {
+    position: static;
+  }
+  .kbd {
+    display: none; /* phones have their own keyboard */
+  }
+  .search-hint,
+  .results-grid {
+    padding-top: 0;
+  }
+}
+
+/* Audio & subtitles panel */
+.tracks-panel {
+  position: absolute;
+  right: var(--gutter);
+  bottom: 7rem;
+  width: min(44rem, 90vw);
+  max-height: 60vh;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  background: rgba(20, 21, 27, 0.95);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.6);
+}
+.tracks-col h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.tracks-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tracks-item.is-focused {
+  background: var(--text);
+  color: var(--bg);
+}
+.tracks-check {
+  width: 1.2rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+.tracks-item.is-focused .tracks-check {
+  color: var(--bg);
+}
+.tracks-note {
+  grid-column: 1 / -1;
+  margin-top: 0.8rem;
+}
+.player-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 2.8rem);
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  font-weight: 600;
+}
+.tracks-empty {
+  margin: 0.4rem 0 0 0.6rem;
+}

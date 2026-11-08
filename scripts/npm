@@ -1,0 +1,13 @@
+#!/bin/sh
+# Run npm inside a throwaway Node container so no toolchain is needed on the host.
+# Usage: scripts/npm install, scripts/npm test, scripts/npm run build ...
+set -eu
+cd "$(dirname "$0")/.."
+NODE_IMAGE="${NODE_IMAGE:-node:24-alpine}"
+TTY=""; [ -t 0 ] && [ -t 1 ] && TTY="-it"
+exec docker run --rm $TTY \
+  -u "$(id -u):$(id -g)" \
+  -e npm_config_cache=/app/.npm-cache \
+  -v "$PWD:/app" -w /app \
+  ${SOFARR_DEV_PORT:+-p "$SOFARR_DEV_PORT:5656"} \
+  "$NODE_IMAGE" npm "$@"
