@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # ---- build: install all deps, compile the server, bundle the web UI ----
-FROM node:24-alpine AS build
+# Runs on the build machine's own architecture: the output is plain JavaScript,
+# so multi-arch images don't pay for an emulated TypeScript/Vite build.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
