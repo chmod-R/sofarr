@@ -199,7 +199,7 @@ it:
   answers 501, "sidecar" delivery is reported unavailable for the iOS profile, and the
   Web profile muxes subtitles into the segments for Plex's own player. Burn-in works for
   every subtitle type (SRT, ASS, PGS, VobSub, DVB). Instant text subtitles via local
-  extraction are on the [to-do list](TODO.md).
+  extraction are [planned](https://github.com/chmod-R/sofarr/issues/4).
 
 ## Web UI
 
@@ -229,6 +229,6 @@ it:
 
 ## Not built yet
 
-See [TODO.md](TODO.md). Larger directions: a native TV app (React Native tvOS or a
+See [GitHub Issues](https://github.com/chmod-R/sofarr/issues). Larger directions: a native TV app (React Native tvOS or a
 Google TV wrapper), friends with shared access signing in, request approvals/quotas,
 and remote access.

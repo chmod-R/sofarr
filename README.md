@@ -114,7 +114,7 @@ of your existing Radarr/Sonarr library already uses.
 - Restarting Sofarr ends streams that are playing (press Play again to resume).
 - Only the Plex server owner can sign in (friends with shared access: planned).
 
-More in [docs/TODO.md](docs/TODO.md).
+More, and what's planned: [GitHub Issues](https://github.com/chmod-R/sofarr/issues).
 
 ## Development
 
