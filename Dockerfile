@@ -3,7 +3,7 @@
 # ---- build: install all deps, compile the server, bundle the web UI ----
 # Runs on the build machine's own architecture: the output is plain JavaScript,
 # so multi-arch images don't pay for an emulated TypeScript/Vite build.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS build
+FROM --platform=$BUILDPLATFORM node:25-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
@@ -14,7 +14,7 @@ COPY web/ web/
 RUN npm run build -w server && npm run build -w web
 
 # ---- runtime: server production deps + compiled server + static web UI ----
-FROM node:24-alpine
+FROM node:25-alpine
 ENV NODE_ENV=production \
     SOFARR_DATA_DIR=/data
 WORKDIR /app
