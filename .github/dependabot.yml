@@ -7,6 +7,11 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Node's type definitions must match the Node version the image runs.
+      # Node majors are upgraded deliberately (image, CI and types together).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -20,3 +25,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Only even-numbered Node releases become LTS; majors are upgraded deliberately.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

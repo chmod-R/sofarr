@@ -28,6 +28,9 @@ Open work, to be moved into GitHub Issues. How things work today:
 - [ ] Switching to a second Plex Home user: tested against a fake plex.tv only.
 
 ## Project
-- [ ] CI: typecheck, tests and image build on every push/PR; publish to GHCR on main
+- [ ] **Upgrade to Node 26 LTS** (Active LTS since October 2026): Docker base image,
+      CI `node-version`, `engines`, and `@types/node` together. Dependabot ignores
+      Node majors so this happens deliberately.
+- [x] CI: typecheck, tests and image build on every push/PR; publish to GHCR on main
       (`:edge`) and on version tags (`:latest`, `:x.y.z`).
 - [ ] Web UI tests (component tests or a headless-browser suite against the fakes).
