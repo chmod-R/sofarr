@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { FetchFn } from "../src/upstreams/http.js";
 import {
@@ -49,7 +50,10 @@ describe("GET /api/health", () => {
   it("reports liveness and version without sign-in", async () => {
     const res = await makeApp().inject("/api/health");
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: "ok", version: "0.1.0" });
+    // Whatever server/package.json says, so a release bump needs no test change.
+    const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(res.json()).toEqual({ status: "ok", version });
   });
 });
 
