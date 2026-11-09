@@ -35,7 +35,11 @@ export interface ResumeInfo {
   percent: number;
 }
 
-export type RowItem = Title & { resume?: ResumeInfo };
+export type RowItem = Title & {
+  resume?: ResumeInfo;
+  /** My Library only: "YYYY-MM-DD" release / premiere date. */
+  released?: string | null;
+};
 
 export interface Row {
   id: string;

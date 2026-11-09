@@ -66,7 +66,8 @@ export function App() {
       if (route.name === "title") {
         return <TitlePage key={`${route.mediaType}:${route.tmdbId}`} mediaType={route.mediaType} tmdbId={route.tmdbId} />;
       }
-      return <Home key={profile.uuid} profile={profile} onSwitchProfile={() => void switchProfile()} onSignOut={() => void signOut()} />;
+      const tab = route.name === "library" ? "library" : "home";
+      return <Home key={`${profile.uuid}:${tab}`} tab={tab} profile={profile} onSwitchProfile={() => void switchProfile()} onSignOut={() => void signOut()} />;
     }
   }
 }

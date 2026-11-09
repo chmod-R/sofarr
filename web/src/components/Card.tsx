@@ -31,16 +31,21 @@ interface CardProps {
   onFocused: (item: RowItem, focusKey: string) => void;
   /** Show year and type under the title (search results mix eras). */
   showYear?: boolean;
+  /** Home rows: the row's selected card is drawn larger. */
+  expanded?: boolean;
+  /** Scroll into view on focus (default). Home rows position cards themselves. */
+  reveal?: boolean;
 }
 
-export function Card({ item, focusKey, onFocused, showYear }: CardProps) {
+export function Card({ item, focusKey, onFocused, showYear, expanded, reveal }: CardProps) {
   const image = item.backdrop ?? item.poster;
   const progress = progressOf(item);
   return (
     <Focusable
       focusKey={focusKey}
-      className={`card status-${item.status}`}
+      className={`card status-${item.status}${expanded ? " is-expanded" : ""}`}
       label={item.title}
+      reveal={reveal}
       onFocused={() => onFocused(item, focusKey)}
       onSelect={() =>
         item.resume

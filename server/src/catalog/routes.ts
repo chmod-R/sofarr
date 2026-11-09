@@ -4,7 +4,7 @@ import { requireAuth } from "../auth/routes.js";
 import type { Db } from "../db.js";
 import { UpstreamError } from "../upstreams/http.js";
 import type { Arr } from "./arr.js";
-import { buildHome } from "./home.js";
+import { buildHome, buildLibrary } from "./home.js";
 import { search } from "./search.js";
 import { PLEX_IMAGE_PATH, type PlexServer } from "./plex.js";
 import type { Tmdb } from "./tmdb.js";
@@ -33,6 +33,14 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogDeps): 
     if (!token) return reply.code(409).send({ error: "profile_not_ready" });
     const result = await buildHome(deps, token);
     for (const w of result.warnings) request.log.warn({ source: w }, "home row source failed");
+    return result;
+  });
+
+  app.get("/api/library", { preHandler: needProfile }, async (request, reply) => {
+    const token = request.auth!.profile!.server_token;
+    if (!token) return reply.code(409).send({ error: "profile_not_ready" });
+    const result = await buildLibrary(deps, token);
+    for (const w of result.warnings) request.log.warn({ source: w }, "library row source failed");
     return result;
   });
 

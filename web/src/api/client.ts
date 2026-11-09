@@ -49,6 +49,7 @@ export const api = {
     call<{ profile: Profile }>("POST", `/api/profiles/${encodeURIComponent(uuid)}/select`, pin ? { pin } : {}),
   deselectProfile: () => call<{ profile: null }>("POST", "/api/profiles/deselect"),
   home: () => call<Home>("GET", "/api/home"),
+  library: () => call<Home>("GET", "/api/library"),
   title: (mediaType: string, tmdbId: number) => call<TitleDetail>("GET", `/api/titles/${mediaType}/${tmdbId}`),
   episodes: (tmdbId: number, season: number, numbering: "sonarr" | "tmdb") =>
     call<SeasonEpisodes>("GET", `/api/titles/tv/${tmdbId}/seasons/${season}?numbering=${numbering}`),

@@ -9,7 +9,12 @@ export interface PlexItem {
   tmdbId: number;
   ratingKey: string;
   title: string;
+  /** Plex's sort title if set, else the title without a leading article, as Plex sorts. */
+  sortTitle: string;
   year: number | null;
+  /** "YYYY-MM-DD": movie release / show premiere, when Plex knows it. */
+  released: string | null;
+  summary: string;
   thumb: string | null;
   art: string | null;
   addedAt: number;
@@ -35,6 +40,8 @@ export interface PlexResume {
   episode: number | null;
   viewOffset: number;
   duration: number;
+  /** The episode's (or movie's) synopsis, when Plex has one. */
+  summary: string;
   thumb: string | null;
   art: string | null;
 }
@@ -43,7 +50,10 @@ interface RawMeta {
   ratingKey: string;
   type: string;
   title: string;
+  titleSort?: string;
   year?: number;
+  originallyAvailableAt?: string;
+  summary?: string;
   thumb?: string;
   art?: string;
   addedAt?: number;
@@ -67,6 +77,11 @@ export function stripYear(title: string, year: number | undefined): string {
   if (!year) return title;
   const suffix = ` (${year})`;
   return title.endsWith(suffix) ? title.slice(0, -suffix.length) : title;
+}
+
+/** "The Office" → "Office": Plex sorts without leading English articles. */
+export function sortableTitle(title: string): string {
+  return title.replace(/^(the|an|a)\s+(?=\S)/i, "");
 }
 
 const tmdbIdOf = (m: RawMeta): number | undefined => {
@@ -131,7 +146,10 @@ export class PlexServer {
                 tmdbId,
                 ratingKey: m.ratingKey,
                 title: stripYear(m.title, m.year),
+                sortTitle: m.titleSort ?? sortableTitle(stripYear(m.title, m.year)),
                 year: m.year ?? null,
+                released: m.originallyAvailableAt ?? null,
+                summary: m.summary ?? "",
                 thumb: m.thumb ?? null,
                 art: m.art ?? null,
                 addedAt: m.addedAt ?? 0,
@@ -175,6 +193,7 @@ export class PlexServer {
           episode: isEp ? (m.index ?? null) : null,
           viewOffset: m.viewOffset ?? 0,
           duration: m.duration ?? 0,
+          summary: m.summary ?? "",
           thumb: (isEp ? m.grandparentThumb : m.thumb) ?? m.thumb ?? null,
           art: (isEp ? m.grandparentArt : m.art) ?? m.art ?? null,
         },

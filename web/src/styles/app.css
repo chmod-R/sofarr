@@ -17,6 +17,7 @@
   --radius: 0.5rem;
   --gutter: clamp(1rem, 4vw, 4rem);
   --card-w: clamp(11rem, 19vw, 19rem);
+  --card-w-lg: calc(var(--card-w) * 1.7);
   color-scheme: dark;
 }
 
@@ -304,7 +305,29 @@ p {
   align-items: center;
   justify-content: space-between;
   padding: 1rem var(--gutter);
-  background: linear-gradient(to bottom, rgba(14, 15, 19, 0.9), rgba(14, 15, 19, 0));
+  background: var(--bg); /* rows scroll up underneath */
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+}
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+}
+.tab {
+  padding: 0.55rem 1.2rem;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.tab.is-current {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
+.tab.is-focused {
+  background: var(--text);
+  color: var(--bg);
 }
 .header-actions {
   display: flex;
@@ -314,40 +337,6 @@ p {
   padding-left: 0.6rem;
 }
 
-.hero {
-  position: relative;
-  height: 62vh;
-  min-height: 20rem;
-  overflow: hidden;
-}
-.hero-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 20%;
-  animation: fade 300ms ease;
-}
-.hero-shade {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(to right, rgba(14, 15, 19, 0.95) 0%, rgba(14, 15, 19, 0.6) 40%, rgba(14, 15, 19, 0) 70%),
-    linear-gradient(to top, var(--bg) 0%, rgba(14, 15, 19, 0) 40%);
-}
-.hero-body {
-  position: absolute;
-  left: var(--gutter);
-  bottom: 2.5rem;
-  width: min(42rem, 80vw);
-}
-.hero-title {
-  font-size: clamp(2rem, 3.4vw, 3.6rem);
-  font-weight: 800;
-  line-height: 1.05;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-}
 .hero-meta {
   display: flex;
   flex-wrap: wrap;
@@ -357,14 +346,6 @@ p {
   color: var(--muted);
   font-weight: 600;
 }
-.hero-overview {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 1.1rem;
-  color: #d6d7dc;
-}
 @keyframes fade {
   from {
     opacity: 0;
@@ -373,8 +354,7 @@ p {
 
 .rows {
   position: relative;
-  margin-top: -1rem;
-  padding-bottom: 4rem;
+  padding: 5rem 0 40vh; /* clear the fixed header; let the last rows scroll up */
 }
 .rows-loading,
 .warnings,
@@ -392,7 +372,9 @@ p {
   margin-bottom: 0.6rem;
 }
 .row-track {
+  position: relative; /* offsetLeft of cards is measured against the track */
   display: flex;
+  align-items: flex-start;
   gap: 0.8rem;
   overflow-x: auto;
   scroll-padding: 0 var(--gutter);
@@ -401,6 +383,43 @@ p {
 }
 .row-track::-webkit-scrollbar {
   display: none;
+}
+/* Home rows: the selected card grows instead of scaling, and its details show below. */
+.row-track .card.is-focused {
+  transform: none;
+}
+.row-track .card.is-expanded {
+  flex-basis: var(--card-w-lg);
+}
+.row-track .card.is-expanded .card-title {
+  font-size: 1.35rem;
+  left: 1rem;
+  bottom: 0.9rem;
+}
+.row-track .card.is-expanded .card-sub {
+  font-size: 0.95rem;
+}
+.row-end {
+  flex: 0 0 calc(100vw - var(--card-w-lg) - 2 * var(--gutter));
+}
+.card-details {
+  width: min(46rem, calc(100vw - 2 * var(--gutter)));
+  height: 7.4rem; /* fixed, so rows below don't jump as the overview length changes */
+  margin: 0 var(--gutter);
+  overflow: hidden;
+  animation: fade 200ms ease;
+}
+.card-details .hero-meta {
+  margin: 0.2rem 0 0.6rem;
+}
+.card-details-overview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: #d6d7dc;
 }
 
 .card {
@@ -854,8 +873,43 @@ p {
   gap: 1.1rem 0.9rem;
   padding: 4rem 0.6rem 0;
 }
-.results-grid .card {
+.results-grid .card,
+.library-grid .card {
   flex: none;
+}
+
+/* ---------- My Library ---------- */
+.library-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* Margin, not padding: the group must start below the fixed header, or Up can't reach it. */
+  margin-top: 0.8rem;
+  padding: 0 var(--gutter) 1.2rem;
+}
+.library-sort .btn {
+  scroll-margin-top: 8rem; /* scroll back out from under the fixed header */
+}
+.library-sort > .muted {
+  margin-right: 0.6rem;
+  font-weight: 600;
+}
+.library-section {
+  margin-bottom: 2.4rem;
+}
+.library-count {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-left: 0.4rem;
+}
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+  gap: 1.4rem 1rem;
+  padding: 0.4rem var(--gutter) 0;
+}
+.library-grid .card {
+  scroll-margin: 9rem 0 2rem; /* keep the fixed header and section title in view */
 }
 @media (max-width: 760px) {
   .search {

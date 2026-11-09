@@ -126,7 +126,7 @@ export function fromPlex(item: PlexItem, ctx: StatusContext): Title {
     tmdbId: item.tmdbId,
     title: item.title,
     year: item.year,
-    overview: "",
+    overview: item.summary,
     poster: plexImageUrl(item.thumb, "poster"),
     backdrop: plexImageUrl(item.art, "backdrop"),
     rating: null,

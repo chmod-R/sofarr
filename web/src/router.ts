@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 /** Two routes don't justify a router library. */
 export type Route =
   | { name: "home" }
+  | { name: "library" }
   | { name: "title"; mediaType: "movie" | "tv"; tmdbId: number }
   | { name: "watch"; plexKey: string; offsetMs?: number }
   | { name: "search"; q: string };
@@ -15,6 +16,7 @@ export function parse(path: string, search = ""): Route {
     const t = new URLSearchParams(search).get("t");
     return { name: "watch", plexKey: w[1]!, ...(t !== null && /^\d+$/.test(t) && { offsetMs: Number(t) }) };
   }
+  if (/^\/library\/?$/.test(path)) return { name: "library" };
   if (/^\/search\/?$/.test(path)) return { name: "search", q: new URLSearchParams(search).get("q") ?? "" };
   return { name: "home" };
 }
@@ -25,6 +27,8 @@ export function href(r: Route): string {
       return `/title/${r.mediaType}/${r.tmdbId}`;
     case "search":
       return r.q ? `/search?q=${encodeURIComponent(r.q)}` : "/search";
+    case "library":
+      return "/library";
     case "watch":
       return `/watch/${r.plexKey}${r.offsetMs !== undefined ? `?t=${r.offsetMs}` : ""}`;
     default:

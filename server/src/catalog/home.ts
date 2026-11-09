@@ -13,7 +13,11 @@ export interface ResumeInfo {
   percent: number;
 }
 
-export type RowItem = Title & { resume?: ResumeInfo };
+export type RowItem = Title & {
+  resume?: ResumeInfo;
+  /** My Library only: "YYYY-MM-DD" release / premiere date, for sorting. */
+  released?: string | null;
+};
 
 export interface Row {
   id: string;
@@ -40,11 +44,9 @@ const MIN_VOTES = 100;
 const MIN_RATING = 6.0;
 const SEED_ROWS = 3;
 
-const goodRec = (i: TmdbItem) => !i.adult && i.voteCount >= MIN_VOTES && i.voteAverage >= MIN_RATING;
-
-export async function buildHome(deps: HomeDeps, serverToken: string): Promise<HomeResult> {
-  const warnings: string[] = [];
-  const soft = async <T>(source: string, p: Promise<T>, fallback: T): Promise<T> => {
+/** Await an upstream call; on an upstream failure, note it in `warnings` and use the fallback. */
+function softFail(warnings: string[]) {
+  return async <T>(source: string, p: Promise<T>, fallback: T): Promise<T> => {
     try {
       return await p;
     } catch (err) {
@@ -53,10 +55,18 @@ export async function buildHome(deps: HomeDeps, serverToken: string): Promise<Ho
       return fallback;
     }
   };
+}
 
-  const emptyLib: PlexLibrary = { byTmdb: new Map(), byRatingKey: new Map() };
+const emptyLibrary = (): PlexLibrary => ({ byTmdb: new Map(), byRatingKey: new Map() });
+
+const goodRec = (i: TmdbItem) => !i.adult && i.voteCount >= MIN_VOTES && i.voteAverage >= MIN_RATING;
+
+export async function buildHome(deps: HomeDeps, serverToken: string): Promise<HomeResult> {
+  const warnings: string[] = [];
+  const soft = softFail(warnings);
+
   const [library, arr, resume] = await Promise.all([
-    soft("plex", deps.plex.library(serverToken), emptyLib),
+    soft("plex", deps.plex.library(serverToken), emptyLibrary()),
     soft("radarr/sonarr", deps.arr.entries(), new Map<string, ArrEntry>()),
     soft("plex", deps.plex.continueWatching(serverToken), []),
   ]);
@@ -132,6 +142,8 @@ export async function buildHome(deps: HomeDeps, serverToken: string): Promise<Ho
       return [
         {
           ...base,
+          // The episode being resumed says more than the show's synopsis.
+          overview: r.summary || base.overview,
           backdrop: plexImageUrl(r.art, "backdrop") ?? base.backdrop,
           resume: {
             plexKey: r.ratingKey,
@@ -177,5 +189,39 @@ export async function buildHome(deps: HomeDeps, serverToken: string): Promise<Ho
   );
   recRow(r2, 2);
 
+  return { rows, warnings: [...new Set(warnings)] };
+}
+
+/** Library order: by Plex's sort title (which drops "The", "A"…), then year. */
+export function byLibraryOrder(a: PlexItem, b: PlexItem): number {
+  return a.sortTitle.localeCompare(b.sortTitle, undefined, { sensitivity: "base", numeric: true }) || (a.year ?? 0) - (b.year ?? 0);
+}
+
+/**
+ * "My Library": everything in the profile's Plex library, one section per media type,
+ * in title order (the UI re-sorts by `released` on request). No ROW_MAX: it's a
+ * browse of everything you have.
+ */
+export async function buildLibrary(deps: Pick<HomeDeps, "plex" | "arr" | "now">, serverToken: string): Promise<HomeResult> {
+  const warnings: string[] = [];
+  const soft = softFail(warnings);
+  const [library, arr] = await Promise.all([
+    soft("plex", deps.plex.library(serverToken), emptyLibrary()),
+    // Only for "downloading" on shows getting new episodes; optional.
+    soft("radarr/sonarr", deps.arr.entries(), new Map<string, ArrEntry>()),
+  ]);
+  const today = (deps.now?.() ?? new Date()).toISOString().slice(0, 10);
+  const ctx: StatusContext = { library, arr, today, release: new Map() };
+  const items = [...library.byTmdb.values()].sort(byLibraryOrder);
+  const rows: Row[] = [];
+  for (const [id, title, type] of [
+    ["library-tv", "TV Shows", "tv"],
+    ["library-movies", "Movies", "movie"],
+  ] as const) {
+    const list = items
+      .filter((i) => i.mediaType === type)
+      .map((i): RowItem => ({ ...fromPlex(i, ctx), released: i.released }));
+    if (list.length) rows.push({ id, title, items: list });
+  }
   return { rows, warnings: [...new Set(warnings)] };
 }

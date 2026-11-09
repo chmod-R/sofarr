@@ -110,6 +110,14 @@ but not yet scanned by Plex) > `requested` (tracked by *arr, nothing downloading
   dropped when playback pauses or stops, so watch state shows up immediately.
 - **Known gap:** Recently Added sorts shows by when the show was added, not by its
   newest episode.
+- **My Library** (`/api/library`, the header's second tab): the profile's whole Plex
+  library as two card grids, TV Shows then Movies, with no limit. The server sends title
+  order, like Plex: its sort title when set, else the title without a leading
+  "The/A/An", then year. Each item also carries `released` (Plex's
+  `originallyAvailableAt`: release or premiere date), so the UI can re-sort by
+  Release Date ↑ (oldest first) or ↓ (newest first); unknown dates go last. The choice
+  is remembered per browser. Like everywhere else, only items Plex has matched to a
+  TMDb id appear.
 
 ## Requests ("Get it")
 
@@ -203,9 +211,17 @@ it:
 
 ## Web UI
 
-- **TV-style layout:** the hero panel shows the *focused* card; Enter opens its title
-  page; Continue Watching cards resume directly. Back = Escape, Backspace, or the TV's
-  back key (Tizen 10009, webOS 461).
+- **Header tabs:** Home and My Library share one screen component. Switching tabs
+  keeps focus on the tab; Back from My Library returns to Home.
+- **TV-style layout:** in the focused row, the selected card is drawn larger with the
+  title's details (year, type, rating, status, overview) underneath. With keys or a
+  remote, that card stays at the row's left edge and the row at the top of the screen,
+  so the selection doesn't move around; a mouse just scrolls what it points at into
+  view. Each row remembers its position. Enter opens the title page; Continue Watching
+  cards resume directly (their details show the episode's synopsis). Back = Escape,
+  Backspace, or the TV's back key (Tizen 10009, webOS 461).
+- Mouse hover only takes focus after a real mouse move, so content scrolling under a
+  resting pointer can't steal focus from the D-pad.
 - The player handles keys itself: Enter play/pause, ←/→ 10 s, ↓ audio & subtitles.
 - The root font size scales with the viewport, so one layout works on a TV, a laptop
   and a phone.

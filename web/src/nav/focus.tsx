@@ -14,6 +14,24 @@ import { type ReactNode, useEffect, useRef } from "react";
  */
 export function initNavigation(): void {
   init({ debug: false, visualDebug: false, distanceCalculationMethod: "center" });
+  // Remember whether the last input was keys or a real mouse move. Browsers send
+  // mouseenter when content scrolls under a resting pointer; those must not
+  // steal focus from the D-pad. (Real moves have a non-zero movement.)
+  window.addEventListener("keydown", () => (pointerActive = false), true);
+  window.addEventListener(
+    "mousemove",
+    (e) => {
+      if (e.movementX || e.movementY) pointerActive = true;
+    },
+    { passive: true },
+  );
+}
+
+let pointerActive = false;
+
+/** True when the user is using a mouse rather than keys / a remote. */
+export function usingPointer(): boolean {
+  return pointerActive;
 }
 
 // Back keys across platforms: Escape/Backspace (browsers), 10009 (Samsung Tizen),
@@ -52,16 +70,18 @@ interface FocusableProps extends Pick<UseFocusableConfig, "focusKey"> {
   disabled?: boolean;
   /** Accessible label for screen readers / mouse users. */
   label?: string;
+  /** Scroll into view on focus (default). Off when the parent positions it. */
+  reveal?: boolean;
 }
 
 /** A focusable, selectable element (button, card, tile). */
-export function Focusable({ children, onSelect, onFocused, className, disabled, focusKey, label }: FocusableProps) {
+export function Focusable({ children, onSelect, onFocused, className, disabled, focusKey, label, reveal: autoReveal = true }: FocusableProps) {
   const { ref, focused, focusSelf } = useFocusable({
     ...(focusKey && { focusKey }),
     focusable: !disabled,
     onEnterPress: () => onSelect?.(),
     onFocus: () => {
-      reveal(ref.current as HTMLElement | null);
+      if (autoReveal) reveal(ref.current as HTMLElement | null);
       onFocused?.();
     },
   });
@@ -72,7 +92,7 @@ export function Focusable({ children, onSelect, onFocused, className, disabled, 
       aria-label={label}
       aria-disabled={disabled || undefined}
       className={[className, focused && "is-focused", disabled && "is-disabled"].filter(Boolean).join(" ")}
-      onMouseEnter={() => !disabled && focusSelf()}
+      onMouseEnter={() => !disabled && pointerActive && focusSelf()}
       onClick={() => !disabled && onSelect?.()}
     >
       {children({ focused })}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { groupQueue } from "../src/catalog/arr.js";
-import { stripYear } from "../src/catalog/plex.js";
+import { byLibraryOrder } from "../src/catalog/home.js";
+import { type PlexItem, sortableTitle, stripYear } from "../src/catalog/plex.js";
 import { classifyRelease } from "../src/catalog/titles.js";
 import {
   FakePlex,
@@ -122,6 +123,8 @@ function plexServer(token: string): Array<[string | RegExp, Handler]> {
               type: "movie",
               title: "The Matrix",
               year: 1999,
+              originallyAvailableAt: "1999-03-31",
+              summary: "A hacker learns the truth.",
               thumb: "/library/metadata/10/thumb/1",
               art: "/library/metadata/10/art/1",
               addedAt: 100,
@@ -144,6 +147,7 @@ function plexServer(token: string): Array<[string | RegExp, Handler]> {
               type: "show",
               title: "Doctor Who (2005)",
               year: 2005,
+              summary: "A time traveller and friends.",
               thumb: "/library/metadata/20/thumb/2",
               art: "/library/metadata/20/art/2",
               addedAt: 200,
@@ -163,6 +167,7 @@ function plexServer(token: string): Array<[string | RegExp, Handler]> {
               ratingKey: "21",
               type: "episode",
               title: "My Rom-Com",
+              summary: "An episode synopsis.",
               grandparentRatingKey: "20",
               grandparentThumb: "/library/metadata/20/thumb/2",
               grandparentArt: "/library/metadata/20/art/2",
@@ -346,8 +351,11 @@ describe("GET /api/home", () => {
       status: "owned",
       plexKey: "20",
       poster: "/api/plex/image?path=%2Flibrary%2Fmetadata%2F20%2Fthumb%2F2&w=342&h=513",
+      overview: "An episode synopsis.", // the episode's, not the show's
       resume: { plexKey: "21", label: "S2 · E8 · My Rom-Com", percent: 25 },
     });
+    // No synopsis on the resume entry: falls back to the library item's.
+    expect(items[1]).toMatchObject({ overview: "A hacker learns the truth." });
     expect(items[1].resume).toEqual({ plexKey: "10", label: null, percent: 0 });
   });
 
@@ -392,6 +400,67 @@ describe("GET /api/home", () => {
     const { cookie } = await signIn(app, plex);
     const res = await app.inject({ url: "/api/home", headers: { cookie: cookie! } });
     expect(res.json()).toEqual({ error: "no_profile_selected" });
+  });
+});
+
+describe("GET /api/library", () => {
+  it("lists the profile's Plex library as TV and movie rows", async () => {
+    const { app, cookie } = await homeSetup();
+    const res = await app.inject({ url: "/api/library", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    const { rows, warnings } = res.json();
+    expect(warnings).toEqual([]);
+    expect(rows.map((r: { id: string; title: string }) => [r.id, r.title])).toEqual([
+      ["library-tv", "TV Shows"],
+      ["library-movies", "Movies"],
+    ]);
+    expect(rows[0].items.map((i: { title: string }) => i.title)).toEqual(["Doctor Who"]);
+    // The home video without a TMDb match is left out, as on the home screen.
+    expect(rows[1].items).toHaveLength(1);
+    expect(rows[1].items[0]).toMatchObject({
+      title: "The Matrix",
+      status: "owned",
+      overview: "A hacker learns the truth.",
+      released: "1999-03-31",
+    });
+    expect(rows[0].items[0].released).toBeNull(); // Plex had no date
+  });
+
+  it("requires a selected profile", async () => {
+    const { app } = await homeSetup();
+    expect((await app.inject({ url: "/api/library" })).statusCode).toBe(401);
+  });
+});
+
+describe("sortableTitle", () => {
+  it("drops a leading article only", () => {
+    expect(sortableTitle("The Long Way Home")).toBe("Long Way Home");
+    expect(sortableTitle("A Quiet Place")).toBe("Quiet Place");
+    expect(sortableTitle("An American Tail")).toBe("American Tail");
+    expect(sortableTitle("Theodore Rex")).toBe("Theodore Rex");
+    expect(sortableTitle("Apollo 13")).toBe("Apollo 13");
+    expect(sortableTitle("The")).toBe("The");
+  });
+});
+
+describe("byLibraryOrder", () => {
+  const item = (title: string, sortTitle: string, year: number | null = null) =>
+    ({ title, sortTitle, year }) as unknown as PlexItem;
+  it("uses Plex's sort title, case-insensitively and with natural numbers, then year", () => {
+    const sorted = [
+      item("The Office", "Office", 2005),
+      item("Alien 3", "Alien 3"),
+      item("alien 10", "alien 10"),
+      item("The Office", "Office", 2001),
+      item("Matrix", "Matrix"),
+    ].sort(byLibraryOrder);
+    expect(sorted.map((i) => `${i.title}${i.year ? ` ${i.year}` : ""}`)).toEqual([
+      "Alien 3",
+      "alien 10",
+      "Matrix",
+      "The Office 2001",
+      "The Office 2005",
+    ]);
   });
 });
 
