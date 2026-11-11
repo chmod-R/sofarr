@@ -584,7 +584,11 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
               e.currentTarget.setPointerCapture(e.pointerId);
               setScrub({ ...scrubAt(e), dragging: true });
             }}
-            onPointerMove={(e) => setScrub((s) => ({ ...scrubAt(e), dragging: s?.dragging ?? false }))}
+            onPointerMove={(e) => {
+              // Measure now: by the time a state updater runs, React has cleared the event's currentTarget.
+              const at = scrubAt(e);
+              setScrub((s) => ({ ...at, dragging: s?.dragging ?? false }));
+            }}
             onPointerUp={(e) => {
               if (scrub?.dragging) seek(scrubAt(e).t - time);
               setScrub(e.pointerType === "mouse" ? { ...scrubAt(e), dragging: false } : null);
