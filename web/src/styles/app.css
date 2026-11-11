@@ -296,6 +296,8 @@ p {
 /* ---------- Home ---------- */
 .home {
   min-height: 100vh;
+  /* Home: the hero's share of the screen; the rows get the rest. */
+  --hero-h: 56vh;
 }
 .header {
   position: fixed;
@@ -305,7 +307,20 @@ p {
   align-items: center;
   justify-content: space-between;
   padding: 1rem var(--gutter);
-  background: var(--bg); /* rows scroll up underneath */
+  /* Sits over the artwork: a shade keeps it readable, and it turns solid once content scrolls under it. */
+  background: linear-gradient(to bottom, rgba(8, 9, 12, 0.8) 0%, rgba(8, 9, 12, 0) 100%);
+}
+.header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg);
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+.header.is-solid::before {
+  opacity: 1;
 }
 .header-left {
   display: flex;
@@ -330,11 +345,62 @@ p {
   color: var(--bg);
 }
 .header-actions {
+  position: relative;
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.btn-icon {
+  padding: 0.55rem;
+  border-radius: 999px;
+}
+.icon {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 .header-profile {
-  padding-left: 0.6rem;
+  padding: 0.3rem;
+  border-radius: 0.6rem;
+}
+.header-profile .avatar-sm {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+.header-profile.is-open {
+  background: rgba(255, 255, 255, 0.14);
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 0.7rem);
+  right: 0;
+  min-width: 14rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  background: rgba(25, 27, 34, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.6);
+  animation: fade 150ms ease;
+}
+.menu-who {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.9rem 0.8rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+}
+.menu-items {
+  display: grid;
+  gap: 0.2rem;
+}
+.menu-item {
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+}
+.menu-item.is-focused {
+  transform: none;
+  box-shadow: none;
 }
 
 .hero-meta {
@@ -352,9 +418,159 @@ p {
   }
 }
 
+/* ---------- Home: hero ---------- */
+/* The top of the screen shows the selected card's title; the rows scroll in what's left. */
+.hero {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--hero-h);
+  overflow: hidden;
+}
+.hero-art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(100%, calc(var(--hero-h) * 16 / 9));
+}
+/* Blend the artwork into the page on the sides it doesn't reach. */
+.hero-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, var(--bg) 0%, rgba(14, 15, 19, 0.6) 22%, rgba(14, 15, 19, 0) 55%),
+    linear-gradient(to top, var(--bg) 0%, rgba(14, 15, 19, 0.5) 18%, rgba(14, 15, 19, 0) 45%);
+}
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  animation: fade 500ms ease;
+}
+.hero-body {
+  position: absolute;
+  left: var(--gutter);
+  bottom: 1.1rem;
+  width: min(40rem, calc(100% - 2 * var(--gutter)));
+  animation: fade 350ms ease;
+}
+/* A fixed slot: the lines below stay put whatever the logo's shape. */
+.hero-title {
+  display: flex;
+  align-items: flex-end;
+  height: clamp(3.5rem, 15vh, 9.5rem);
+  font-size: clamp(1.8rem, 3.2vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+.hero-logo {
+  max-width: min(100%, 26rem);
+  max-height: 100%;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 0.15rem 0.6rem rgba(0, 0, 0, 0.6));
+}
+.hero-title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 0.1rem 0.8rem rgba(0, 0, 0, 0.7);
+  animation: fade 300ms ease;
+}
+.hero-overview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: calc(3 * 1.45em);
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: #d6d7dc;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+@media (max-height: 520px) {
+  .hero-overview {
+    -webkit-line-clamp: 2;
+    height: calc(2 * 1.45em);
+  }
+}
+
+/* Images fade in when loaded. */
+.fade-img {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.fade-img.is-loaded {
+  opacity: 1;
+}
+
+/* ---------- Skeletons ---------- */
+.skel {
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+  animation: skel-pulse 1.3s ease-in-out infinite alternate;
+}
+@keyframes skel-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+.card.skel {
+  cursor: default;
+}
+.skel-line {
+  height: 0.9em;
+  margin: 0.3em 0 0.55em;
+}
+.skel-line.is-short {
+  width: 60%;
+}
+.skel-logo {
+  width: min(22rem, 70%);
+  height: 4.5rem;
+}
+.skel-meta {
+  width: 16rem;
+  height: 1.3rem;
+}
+.skel-heading {
+  width: 12rem;
+  height: 1.3rem;
+}
+.skel-grid-heading {
+  padding-top: 1rem;
+}
+.skel-button {
+  width: 9rem;
+  height: 2.8rem;
+}
+.splash {
+  animation: skel-pulse 1.1s ease-in-out infinite alternate;
+}
+
 .rows {
   position: relative;
   padding: 5rem 0 40vh; /* clear the fixed header; let the last rows scroll up */
+}
+/* Home: the rows scroll in their own area under the hero, so rows above the
+   selected one slide out of sight instead of covering the artwork. */
+.home-home .rows {
+  position: fixed;
+  inset: var(--hero-h) 0 0 0;
+  padding: 0.4rem 0 70vh; /* any row can be brought to the top */
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.home-home .rows::-webkit-scrollbar {
+  display: none;
 }
 .rows-loading,
 .warnings,
@@ -362,14 +578,19 @@ p {
   padding: 1rem var(--gutter);
 }
 .row {
-  margin-bottom: 1.6rem;
-  scroll-margin-top: 5rem;
+  margin-bottom: 1rem;
 }
 .row-title {
   font-size: 1.3rem;
   font-weight: 700;
   padding: 0 var(--gutter);
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.2rem;
+  color: var(--muted);
+  transition: color 200ms ease;
+}
+.row.is-active .row-title,
+.library-section .row-title {
+  color: var(--text);
 }
 .row-track {
   position: relative; /* offsetLeft of cards is measured against the track */
@@ -378,48 +599,17 @@ p {
   gap: 0.8rem;
   overflow-x: auto;
   scroll-padding: 0 var(--gutter);
-  padding: 0.6rem var(--gutter) 0.9rem; /* room for the focus scale */
+  padding: 1rem var(--gutter) 1.1rem; /* room for the focus ring and scale */
   scrollbar-width: none;
 }
 .row-track::-webkit-scrollbar {
   display: none;
 }
-/* Home rows: the selected card grows instead of scaling, and its details show below. */
 .row-track .card.is-focused {
-  transform: none;
-}
-.row-track .card.is-expanded {
-  flex-basis: var(--card-w-lg);
-}
-.row-track .card.is-expanded .card-title {
-  font-size: 1.35rem;
-  left: 1rem;
-  bottom: 0.9rem;
-}
-.row-track .card.is-expanded .card-sub {
-  font-size: 0.95rem;
+  transform: scale(1.05);
 }
 .row-end {
-  flex: 0 0 calc(100vw - var(--card-w-lg) - 2 * var(--gutter));
-}
-.card-details {
-  width: min(46rem, calc(100vw - 2 * var(--gutter)));
-  height: 7.4rem; /* fixed, so rows below don't jump as the overview length changes */
-  margin: 0 var(--gutter);
-  overflow: hidden;
-  animation: fade 200ms ease;
-}
-.card-details .hero-meta {
-  margin: 0.2rem 0 0.6rem;
-}
-.card-details-overview {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 1.05rem;
-  line-height: 1.45;
-  color: #d6d7dc;
+  flex: 0 0 calc(100vw - var(--card-w) - 2 * var(--gutter));
 }
 
 .card {
@@ -540,6 +730,13 @@ p {
   font-size: clamp(2.2rem, 4vw, 4rem);
   font-weight: 800;
   line-height: 1.05;
+}
+.title-logo {
+  max-width: min(100%, 30rem);
+  max-height: clamp(5rem, 22vh, 13rem);
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 0.15rem 0.6rem rgba(0, 0, 0, 0.6));
 }
 .title-tagline {
   margin-top: 0.5rem;

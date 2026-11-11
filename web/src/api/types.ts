@@ -69,6 +69,8 @@ export interface TitleDetail extends Title {
   genres: string[];
   runtime: number | null;
   trailerYoutubeKey: string | null;
+  /** Title logo artwork, shown in place of the plain-text title. */
+  logo: string | null;
   seasons?: SeasonInfo[];
   seasonNumbering?: "identity" | "offset" | "sonarr-only" | "tmdb";
 }

@@ -30,6 +30,8 @@ export interface TitleDetail extends Title {
   genres: string[];
   runtime: number | null;
   trailerYoutubeKey: string | null;
+  /** Title logo artwork (TMDb), shown in place of the plain-text title. */
+  logo: string | null;
   seasons?: SeasonInfo[];
   /** How `seasons[].number` relates to TMDb: same, shifted, or Sonarr's numbering only. */
   seasonNumbering?: SeasonMapping["kind"] | "tmdb";
@@ -155,6 +157,7 @@ export async function buildDetail(
     genres: full.genres,
     runtime: full.runtime,
     trailerYoutubeKey: full.trailerYoutubeKey,
+    logo: full.logo,
   };
 
   if (mediaType === "tv") {

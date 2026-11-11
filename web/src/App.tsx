@@ -44,7 +44,11 @@ export function App() {
 
   switch (auth.kind) {
     case "loading":
-      return <main className="center-screen muted">Loading…</main>;
+      return (
+        <main className="center-screen" aria-busy="true" aria-label="Loading">
+          <div className="brand brand-large splash">Sofarr</div>
+        </main>
+      );
     case "error":
       return (
         <main className="center-screen">

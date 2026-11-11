@@ -96,6 +96,23 @@ export function registerRequestRoutes(app: FastifyInstance, deps: RequestDeps): 
     }
   });
 
+  /** Just the title's logo artwork, for the home screen's hero (one cached TMDb call). */
+  app.get("/api/titles/:mediaType/:tmdbId/logo", { preHandler: needProfile }, async (request, reply) => {
+    const p = titleParams.safeParse(request.params);
+    if (!p.success) return reply.code(400).send({ error: "invalid_title" });
+    if (!deps.tmdb) return reply.code(503).send({ error: "tmdb_not_configured" });
+    try {
+      const logo = await deps.tmdb.logo(p.data.mediaType, p.data.tmdbId);
+      // Logos rarely change; let the browser keep the answer too.
+      return reply.header("cache-control", "private, max-age=86400").send({ logo });
+    } catch (err) {
+      if (err instanceof UpstreamError && err.status === 404) {
+        return reply.code(404).send({ error: "unknown_title" });
+      }
+      return upstream(reply, err, "catalog");
+    }
+  });
+
   /** One season's episodes, with per-episode status. */
   app.get("/api/titles/tv/:tmdbId/seasons/:season", { preHandler: needProfile }, async (request, reply) => {
     const p = episodesParams.safeParse(request.params);

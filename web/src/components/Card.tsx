@@ -1,6 +1,7 @@
 import type { RowItem } from "../api/types";
 import { Focusable } from "../nav/focus";
 import { navigate } from "../router";
+import { FadeImg } from "./FadeImg";
 import { shortDate } from "./format";
 
 /** Small corner badge: only for titles you can't just play. */
@@ -31,19 +32,19 @@ interface CardProps {
   onFocused: (item: RowItem, focusKey: string) => void;
   /** Show year and type under the title (search results mix eras). */
   showYear?: boolean;
-  /** Home rows: the row's selected card is drawn larger. */
-  expanded?: boolean;
+  /** Home rows: this is the row's selected card (the one the hero shows). */
+  selected?: boolean;
   /** Scroll into view on focus (default). Home rows position cards themselves. */
   reveal?: boolean;
 }
 
-export function Card({ item, focusKey, onFocused, showYear, expanded, reveal }: CardProps) {
+export function Card({ item, focusKey, onFocused, showYear, selected, reveal }: CardProps) {
   const image = item.backdrop ?? item.poster;
   const progress = progressOf(item);
   return (
     <Focusable
       focusKey={focusKey}
-      className={`card status-${item.status}${expanded ? " is-expanded" : ""}`}
+      className={`card status-${item.status}${selected ? " is-selected" : ""}`}
       label={item.title}
       reveal={reveal}
       onFocused={() => onFocused(item, focusKey)}
@@ -56,7 +57,7 @@ export function Card({ item, focusKey, onFocused, showYear, expanded, reveal }: 
       {() => (
         <>
           {image ? (
-            <img className="card-img" src={image} alt="" loading="lazy" decoding="async" />
+            <FadeImg className="card-img" src={image} lazy />
           ) : (
             <div className="card-img card-img-missing" />
           )}

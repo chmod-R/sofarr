@@ -42,7 +42,7 @@ watch. The existing pieces each cover only part of that:
    ├─ Plex server .... library, watch state, artwork, universal transcoder (HLS)
    ├─ Radarr/Sonarr .. library, queue, add/monitor/search ("Get it")
    ├─ qBittorrent .... live download progress (optional)
-   └─ TMDb ........... trending, recommendations, search, details, release dates
+   └─ TMDb ........... trending, recommendations, search, details, logos, release dates
 ```
 
 - **Single container.** The backend serves the built web UI. State is one SQLite file.
@@ -213,11 +213,23 @@ it:
 
 - **Header tabs:** Home and My Library share one screen component. Switching tabs
   keeps focus on the tab; Back from My Library returns to Home.
-- **TV-style layout:** in the focused row, the selected card is drawn larger with the
-  title's details (year, type, rating, status, overview) underneath. With keys or a
-  remote, that card stays at the row's left edge and the row at the top of the screen,
-  so the selection doesn't move around; a mouse just scrolls what it points at into
-  view. Each row remembers its position. Enter opens the title page; Continue Watching
+- **TV-style layout:** the top of Home is a hero that follows the selected card: its
+  artwork, title logo, year, type, rating, status and overview. The rows scroll in their
+  own area underneath, so rows above the selected one slide out of sight. With keys or a
+  remote, the selected card stays at the row's left edge and its row at the top of that
+  area, so the selection doesn't move around; a mouse just scrolls what it points at
+  into view. Each row remembers its position. The hero waits for the selection to rest
+  (180 ms) before changing, cross-fades artwork only once it has loaded, and prefetches
+  the neighbouring cards' artwork. It has nothing to focus.
+- **Title logos** replace the plain-text title in the hero and on title pages when TMDb
+  has one (`/api/titles/:type/:id/logo` for the hero, looked up per focused title rather
+  than for every card on Home; title pages get it with their details). Preference: the
+  configured language, then language-neutral, then English; best rated first.
+- **Header:** overlays the artwork with a shade and turns solid once the page scrolls
+  (My Library). Search is an icon; the avatar opens a menu (Switch profile, Sign out)
+  that holds focus until closed.
+- **Loading:** screens show placeholders in the shape of their content, and images fade
+  in when loaded. All motion is off under `prefers-reduced-motion`. Enter opens the title page; Continue Watching
   cards resume directly (their details show the episode's synopsis). Back = Escape,
   Backspace, or the TV's back key (Tizen 10009, webOS 461).
 - Mouse hover only takes focus after a real mouse move, so content scrolling under a

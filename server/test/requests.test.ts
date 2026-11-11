@@ -168,13 +168,22 @@ class FakeArr {
 }
 
 const tmdbKey = "0123456789abcdef0123456789abcdef";
+// Another language's logo outranks it, but the configured language (en) wins; then the best rated.
+const matrixLogos = [
+  { file_path: "/fr.png", iso_639_1: "fr", vote_average: 9 },
+  { file_path: "/en-low.png", iso_639_1: "en", vote_average: 2 },
+  { file_path: "/en-top.png", iso_639_1: "en", vote_average: 5.5 },
+  { file_path: "/neutral.svg", iso_639_1: null, vote_average: 8 },
+];
 function tmdbRoutes(): Array<[string | RegExp, Handler]> {
   const ok =
     (b: unknown): Handler =>
     (u) =>
       u.searchParams.get("api_key") === tmdbKey ? json(b) : json({}, 401);
   return [
-    [`${TMDB}/movie/603`, ok({ id: 603, title: "The Matrix", release_date: "1999-03-31", genres: [{ name: "Action" }], runtime: 136, videos: { results: [{ site: "YouTube", type: "Trailer", key: "vKQi3bBA1y8", official: true }] } })],
+    [`${TMDB}/movie/603`, ok({ id: 603, title: "The Matrix", release_date: "1999-03-31", genres: [{ name: "Action" }], runtime: 136, videos: { results: [{ site: "YouTube", type: "Trailer", key: "vKQi3bBA1y8", official: true }] }, images: { logos: matrixLogos } })],
+    [`${TMDB}/movie/603/images`, ok({ logos: matrixLogos })],
+    [`${TMDB}/movie/813/images`, ok({ logos: [] })],
     [`${TMDB}/movie/603/release_dates`, ok({ results: [] })],
     [`${TMDB}/movie/813`, ok({ id: 813, title: "Casablanca", release_date: "1980-07-02" })],
     [`${TMDB}/movie/500`, ok({ id: 500, title: "Unmonitored", release_date: "1990-01-01" })],
@@ -203,6 +212,7 @@ function tmdbRoutes(): Array<[string | RegExp, Handler]> {
       }),
     ],
     [`${TMDB}/movie/404404`, () => json({ status_code: 34 }, 404)],
+    [`${TMDB}/movie/404404/images`, () => json({ status_code: 34 }, 404)],
     [
       `${TMDB}/tv/87012`,
       ok({
@@ -586,7 +596,32 @@ describe("GET /api/titles/:mediaType/:tmdbId", () => {
       genres: ["Action"],
       runtime: 136,
       trailerYoutubeKey: "vKQi3bBA1y8",
+      logo: "https://image.tmdb.org/t/p/w500/en-top.png",
     });
+  });
+
+  it("has no logo when TMDb has none", async () => {
+    const { app, cookie } = await setup();
+    expect((await app.inject({ url: "/api/titles/movie/813", headers: { cookie } })).json().logo).toBeNull();
+  });
+
+  it("/logo returns just the logo in the configured language, cacheable", async () => {
+    const { app, cookie } = await setup();
+    const res = await app.inject({ url: "/api/titles/movie/603/logo", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ logo: "https://image.tmdb.org/t/p/w500/en-top.png" });
+    expect(res.headers["cache-control"]).toBe("private, max-age=86400");
+  });
+
+  it("/logo answers null when there is no logo, and 404 for an unknown title", async () => {
+    const { app, cookie } = await setup();
+    expect((await app.inject({ url: "/api/titles/movie/813/logo", headers: { cookie } })).json()).toEqual({ logo: null });
+    expect((await app.inject({ url: "/api/titles/movie/404404/logo", headers: { cookie } })).statusCode).toBe(404);
+  });
+
+  it("/logo requires a signed-in profile", async () => {
+    const { app } = await setup();
+    expect((await app.inject({ url: "/api/titles/movie/603/logo" })).statusCode).toBe(401);
   });
 
   it("returns per-season status for shows, skipping specials", async () => {

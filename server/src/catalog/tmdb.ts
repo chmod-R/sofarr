@@ -49,6 +49,11 @@ interface RawFull extends RawItem {
   external_ids?: { tvdb_id?: number | null };
   seasons?: Array<{ season_number: number; name: string; episode_count: number; air_date?: string | null }>;
   videos?: { results: Array<{ site: string; type: string; key: string; official?: boolean }> };
+  images?: RawImages;
+}
+
+interface RawImages {
+  logos?: Array<{ file_path: string; iso_639_1?: string | null; vote_average?: number }>;
 }
 
 export interface TmdbFull extends TmdbItem {
@@ -56,6 +61,8 @@ export interface TmdbFull extends TmdbItem {
   genres: string[];
   runtime: number | null;
   trailerYoutubeKey: string | null;
+  /** Title logo (transparent artwork of the title's name), when TMDb has one. */
+  logo: string | null;
   lastAirDate: string | null;
   tvdbId: number | null;
   seasons: Array<{ number: number; name: string; episodeCount: number; airDate: string | null }>;
@@ -71,6 +78,24 @@ export function posterUrl(path: string | null, size = "w342"): string | null {
 
 export function backdropUrl(path: string | null, size = "w780"): string | null {
   return path ? `${IMG}/${size}${path}` : null;
+}
+
+/** Logos are transparent PNGs, or SVGs that TMDb only serves at original size. */
+export function logoUrl(path: string | null): string | null {
+  if (!path) return null;
+  return `${IMG}/${path.endsWith(".svg") ? "original" : "w500"}${path}`;
+}
+
+/** The best-rated logo in the wanted language, else a language-neutral one, else English. */
+export function pickLogo(images: RawImages | undefined, lang: string): string | null {
+  const logos = images?.logos ?? [];
+  for (const want of [lang, null, "en"]) {
+    const best = logos
+      .filter((l) => (l.iso_639_1 ?? null) === want)
+      .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0))[0];
+    if (best) return logoUrl(best.file_path);
+  }
+  return null;
 }
 
 function normalise(raw: RawItem, mediaType: MediaType): TmdbItem {
@@ -100,6 +125,11 @@ export class Tmdb {
     private readonly opts: { timeoutMs: number; language: string; region: string },
   ) {
     this.bearer = apiKey.startsWith("eyJ");
+  }
+
+  /** "en-US" → "en": artwork is tagged by language only. */
+  private get imageLanguage(): string {
+    return this.opts.language.split("-")[0]!.toLowerCase();
   }
 
   private get<T>(path: string, params: Record<string, string> = {}, ttlMs = 6 * HOUR): Promise<T> {
@@ -142,7 +172,11 @@ export class Tmdb {
   async fullDetails(mediaType: MediaType, tmdbId: number): Promise<TmdbFull> {
     const raw = await this.get<RawFull>(
       `/${mediaType}/${tmdbId}`,
-      { append_to_response: mediaType === "tv" ? "videos,external_ids" : "videos" },
+      {
+        append_to_response: mediaType === "tv" ? "videos,images,external_ids" : "videos,images",
+        // Without this, appended images are limited to the request language and miss neutral ones.
+        include_image_language: `${this.imageLanguage},null`,
+      },
       24 * HOUR,
     );
     const trailer =
@@ -155,6 +189,7 @@ export class Tmdb {
       genres: (raw.genres ?? []).map((g) => g.name),
       runtime: raw.runtime ?? raw.episode_run_time?.[0] ?? (raw.last_episode_to_air?.runtime || null),
       trailerYoutubeKey: trailer?.key ?? null,
+      logo: pickLogo(raw.images, this.imageLanguage),
       lastAirDate: raw.last_air_date ?? null,
       tvdbId: raw.external_ids?.tvdb_id ?? null,
       seasons: (raw.seasons ?? [])
@@ -181,6 +216,16 @@ export class Tmdb {
       airDate: e.air_date ?? null,
       overview: e.overview ?? "",
     }));
+  }
+
+  /** A title's logo on its own: light enough to look up for whatever is in focus. */
+  async logo(mediaType: MediaType, tmdbId: number): Promise<string | null> {
+    const body = await this.get<RawImages>(
+      `/${mediaType}/${tmdbId}/images`,
+      { include_image_language: `${this.imageLanguage},null` },
+      24 * HOUR,
+    );
+    return pickLogo(body, this.imageLanguage);
   }
 
   async tvdbId(tmdbId: number): Promise<number | null> {

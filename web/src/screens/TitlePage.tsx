@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { EpisodeInfo, MediaType, SeasonEpisodes, SeasonInfo, TitleDetail } from "../api/types";
+import { largeBackdrop } from "../components/art";
+import { FadeImg } from "../components/FadeImg";
 import { downloadLabel, runtime, shortDate, statusLabel } from "../components/format";
+import { TitleSkeleton } from "../components/Skeleton";
 import { FocusGroup, Focusable, setFocus, useBackKey } from "../nav/focus";
 import { goBack, navigate } from "../router";
 
@@ -289,6 +292,7 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [trailer, setTrailer] = useState(false);
+  const [logoFailed, setLogoFailed] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -365,7 +369,7 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
       </main>
     );
   }
-  if (!detail) return <main className="center-screen muted">Loading…</main>;
+  if (!detail) return <TitleSkeleton />;
 
   const meta = [
     detail.year,
@@ -402,10 +406,16 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
 
   return (
     <main className="title-page">
-      {detail.backdrop && <img className="title-backdrop" src={detail.backdrop.replace("/w780/", "/w1280/")} alt="" />}
+      {detail.backdrop && <FadeImg className="title-backdrop" src={largeBackdrop(detail.backdrop)!} />}
       <div className="title-shade" />
       <div className="title-body">
-        <h1 className="title-name">{detail.title}</h1>
+        <h1 className="title-name" aria-label={detail.title}>
+          {detail.logo && logoFailed !== detail.logo ? (
+            <FadeImg className="title-logo" src={detail.logo} onError={() => setLogoFailed(detail.logo)} />
+          ) : (
+            detail.title
+          )}
+        </h1>
         {detail.tagline && <p className="title-tagline">{detail.tagline}</p>}
         <div className="hero-meta">
           {meta.map((m) => (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Title } from "../api/types";
 import { Card } from "../components/Card";
+import { GridSkeleton } from "../components/Skeleton";
 import { FocusGroup, Focusable, setFocus } from "../nav/focus";
 import { goBack, navigate } from "../router";
 
@@ -145,7 +146,7 @@ export function Search({ initialQuery }: { initialQuery: string }) {
 
       <section className="search-results" aria-live="polite">
         {q.length < 2 && <p className="muted search-hint">Type at least two letters.</p>}
-        {q.length >= 2 && loading && !results && <p className="muted search-hint">Searching…</p>}
+        {q.length >= 2 && loading && !results && <GridSkeleton className="results-grid" count={9} />}
         {error && <p className="error search-hint">{error}</p>}
         {q.length >= 2 && results && results.length === 0 && !loading && (
           <p className="muted search-hint">Nothing found for “{q}”.</p>

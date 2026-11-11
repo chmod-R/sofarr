@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef } from "react";
 import type { Row as RowData, RowItem } from "../api/types";
 import { FocusGroup, usingPointer } from "../nav/focus";
 import { Card } from "./Card";
-import { CardDetails } from "./CardDetails";
 
 interface RowProps {
   row: RowData;
@@ -12,18 +11,16 @@ interface RowProps {
 }
 
 /**
- * A home row. The active row draws its selected card larger with the title's
- * details underneath; with keys / a remote, that card is kept at the row's left
- * edge and the row at the top of the screen, so the selection stays in one place.
+ * A home row. The hero above shows the selected card's title. With keys / a
+ * remote, that card is kept at the row's left edge and its row at the top of the
+ * rows area, so the selection stays in one place and the content moves to it.
  */
 export function Row({ row, activeId, onFocused }: RowProps) {
   const ref = useRef<HTMLElement>(null);
-  const active = activeId ? row.items.find((i) => i.id === activeId) : undefined;
 
-  // After layout, so the previously selected card has already shrunk.
   useLayoutEffect(() => {
     const section = ref.current;
-    const card = section?.querySelector<HTMLElement>(".card.is-expanded");
+    const card = section?.querySelector<HTMLElement>(".card.is-selected");
     const track = card?.parentElement;
     if (!section || !card || !track) return;
     if (usingPointer()) {
@@ -36,7 +33,7 @@ export function Row({ row, activeId, onFocused }: RowProps) {
   }, [activeId]);
 
   return (
-    <section ref={ref} className={`row${active ? " is-active" : ""}`} aria-label={row.title}>
+    <section ref={ref} className={`row${activeId ? " is-active" : ""}`} aria-label={row.title}>
       <h2 className="row-title">{row.title}</h2>
       <FocusGroup className="row-track" focusKey={`row:${row.id}`}>
         {row.items.map((item) => (
@@ -45,14 +42,13 @@ export function Row({ row, activeId, onFocused }: RowProps) {
             item={item}
             focusKey={`card:${row.id}:${item.id}`}
             onFocused={(i, key) => onFocused(row.id, i, key)}
-            expanded={item.id === active?.id}
+            selected={item.id === activeId}
             reveal={false}
           />
         ))}
         {/* Room to scroll the last cards to the left edge too. */}
         <div className="row-end" aria-hidden />
       </FocusGroup>
-      {active && <CardDetails item={active} />}
     </section>
   );
 }
