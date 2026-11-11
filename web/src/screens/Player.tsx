@@ -8,6 +8,36 @@ const PROGRESS_MS = 10_000;
 const CONTROLS_HIDE_MS = 3500;
 const SEEK_S = 10;
 const UP_NEXT_S = 10;
+/** Paused and untouched this long: show what's playing instead of the controls. */
+const PAUSED_IDLE_MS = 6000;
+/** The button row gives focus back to the video when left alone. */
+const ROW_IDLE_MS = 8000;
+
+const PlayIcon = () => (
+  <svg className="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M7 4.5v15a.8.8 0 0 0 1.2.7l12.5-7.5a.8.8 0 0 0 0-1.4L8.200 3.800A.8.8 0 0 0 7 4.500z" />
+  </svg>
+);
+const PauseIcon = () => (
+  <svg className="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <rect x="5.500" y="4" width="4.500" height="16" rx="1" />
+    <rect x="14" y="4" width="4.500" height="16" rx="1" />
+  </svg>
+);
+/** A circular arrow around "10": back (dir -1) or forward (dir 1). */
+const SkipIcon = ({ dir }: { dir: -1 | 1 }) => (
+  <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <g transform={dir === 1 ? "translate(24 0) scale(-1 1)" : undefined}>
+      <path d="M5.200 8.500A8 8 0 1 1 4 13" />
+      <path d="M5.600 3.800v4.900h4.900" />
+    </g>
+    <text x="12" y="16.200" textAnchor="middle" fontSize="7.500" fontWeight="700" fill="currentColor" stroke="none">
+      10
+    </text>
+  </svg>
+);
+
+type RowButton = "restart" | "next" | "tracks" | "fullscreen";
 
 /** What this browser can decode; decides whether Plex can stream files unconverted. */
 export function detectCapabilities(): PlayCapabilities {
@@ -72,6 +102,17 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
   /** Audio & Subtitles panel: which column (0 audio, 1 subtitles) and row is highlighted. */
   const [panel, setPanel] = useState<{ col: 0 | 1; row: number } | null>(null);
   const [switching, setSwitching] = useState<string | null>(null);
+  /** The highlighted button of the bottom row, when the remote is on it (else keys drive the video). */
+  const [row, setRow] = useState<RowButton | null>(null);
+  /** The last ←/→ skips, added up, for the on-screen "+30 s". */
+  const [skipped, setSkipped] = useState<{ dir: -1 | 1; total: number; n: number } | null>(null);
+  /** Where the pointer is on the scrub bar (seconds), and whether it's dragging. */
+  const [scrub, setScrub] = useState<{ t: number; x: number; dragging: boolean } | null>(null);
+  const [pausedIdle, setPausedIdle] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const lastActivity = useRef(Date.now());
+  const skipTimer = useRef<number>(0);
+  const rootRef = useRef<HTMLElement>(null);
   const hideTimer = useRef<number>(0);
   const stopped = useRef(false);
   // The reporter reads the session from a ref so it never changes identity:
@@ -94,6 +135,8 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
   }, [report]);
 
   const showControls = useCallback(() => {
+    lastActivity.current = Date.now();
+    setPausedIdle(false);
     setControls(true);
     window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => {
@@ -145,6 +188,7 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
     setError(null);
     setUpNext(null);
     setPanel(null);
+    setRow(null);
     (async () => {
       try {
         capsRef.current = detectCapabilities();
@@ -244,6 +288,46 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
     [session, showControls],
   );
 
+  /** A ←/→ (or on-screen) skip: seeks, and shows the running total while presses keep coming. */
+  const skip = useCallback(
+    (dir: -1 | 1, seconds = SEEK_S) => {
+      seek(dir * seconds);
+      setSkipped((k) => ({ dir, total: (k?.dir === dir ? k.total : 0) + seconds, n: (k?.n ?? 0) + 1 }));
+      window.clearTimeout(skipTimer.current);
+      skipTimer.current = window.setTimeout(() => setSkipped(null), 900);
+    },
+    [seek],
+  );
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void rootRef.current?.requestFullscreen?.().catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // Paused and left alone: swap the controls for a "what's playing" screen.
+  useEffect(() => {
+    if (!paused || !session || error || buffering) return;
+    const t = window.setInterval(() => {
+      if (Date.now() - lastActivity.current >= PAUSED_IDLE_MS) setPausedIdle(true);
+    }, 1000);
+    return () => {
+      window.clearInterval(t);
+      setPausedIdle(false);
+    };
+  }, [paused, session, error, buffering]);
+
+  // The button row hands the keys back to the video when left alone.
+  useEffect(() => {
+    if (!row) return;
+    const t = window.setTimeout(() => setRow(null), ROW_IDLE_MS);
+    return () => window.clearTimeout(t);
+  }, [row]);
+
   const playNext = useCallback(() => {
     const next = sessionRef.current?.next;
     if (!next) return;
@@ -260,6 +344,14 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
     return () => window.clearTimeout(t);
   }, [upNext, playNext]);
 
+  /** The bottom row's buttons, left to right. */
+  const rowButtons: RowButton[] = [
+    "restart",
+    ...(session?.next ? (["next"] as const) : []),
+    "tracks",
+    ...(document.fullscreenEnabled ? (["fullscreen"] as const) : []),
+  ];
+
   const columns = session ? choicesOf(session) : ([[], []] as [Choice[], Choice[]]);
   // Always offered, so it's discoverable; the panel says when there's nothing to switch to.
   const hasTracks = Boolean(session);
@@ -271,8 +363,20 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
     const col: 0 | 1 = subs.length > 1 || audio.length <= 1 ? 1 : 0;
     const list = col === 0 ? audio : subs;
     setPanel({ col, row: Math.max(0, list.findIndex((c) => c.selected)) });
+    setRow(null);
     setControls(true);
   }, []);
+
+  const press = useCallback(
+    (b: RowButton) => {
+      showControls();
+      if (b === "restart") seek(-(videoRef.current?.currentTime ?? 0));
+      else if (b === "next") playNext();
+      else if (b === "tracks") openPanel();
+      else toggleFullscreen();
+    },
+    [showControls, seek, playNext, openPanel, toggleFullscreen],
+  );
 
   // Long track lists scroll: keep the highlighted row visible as the remote moves it.
   useEffect(() => {
@@ -295,6 +399,17 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
           const c = list[panel.row];
           if (c) void choose(c);
         }
+        return;
+      }
+      if (row && upNext === null) {
+        // On the button row: ←/→ pick a button, Enter presses it, Up or Back returns to the video.
+        e.preventDefault();
+        const at = rowButtons.indexOf(row);
+        if (isBack || e.key === "ArrowUp") setRow(null);
+        else if (e.key === "ArrowLeft") setRow(rowButtons[Math.max(0, at - 1)] ?? row);
+        else if (e.key === "ArrowRight") setRow(rowButtons[Math.min(rowButtons.length - 1, at + 1)] ?? row);
+        else if (e.key === "Enter" || e.key === " ") press(row);
+        showControls();
         return;
       }
       if (isBack) {
@@ -328,22 +443,29 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
           break;
         case "ArrowRight":
           e.preventDefault();
-          seek(SEEK_S);
+          skip(1);
           break;
         case "ArrowLeft":
           e.preventDefault();
-          seek(-SEEK_S);
+          skip(-1);
           break;
         case "MediaFastForward":
-          seek(30);
+          skip(1, 30);
           break;
         case "MediaRewind":
-          seek(-30);
+          skip(-1, 30);
+          break;
+        case "MediaTrackNext":
+          playNext();
+          break;
+        case "f":
+        case "F":
+          toggleFullscreen();
           break;
         case "ArrowDown":
           e.preventDefault();
-          if (hasTracks) openPanel();
-          else showControls();
+          if (hasTracks) setRow("tracks");
+          showControls();
           break;
         case "ArrowUp":
           e.preventDefault();
@@ -353,14 +475,34 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggle, seek, exit, showControls, upNext, upNextChoice, playNext, panel, columns, choose, hasTracks, openPanel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toggle, skip, exit, showControls, upNext, upNextChoice, playNext, panel, columns, choose, hasTracks, row, press, toggleFullscreen, rowButtons.join()]);
 
   const duration = session ? session.durationMs / 1000 : 0;
-  const pct = duration ? Math.min(100, (time / duration) * 100) : 0;
+  // While dragging the scrub bar, it shows where you'd land rather than where playback is.
+  const shown = scrub?.dragging ? scrub.t : time;
+  const pct = duration ? Math.min(100, (shown / duration) * 100) : 0;
+  const scrubAt = (e: { clientX: number; currentTarget: HTMLElement }) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(r.width, e.clientX - r.left));
+    return { x, t: r.width ? (x / r.width) * duration : 0 };
+  };
+  const rowLabel: Record<RowButton, string> = {
+    restart: "Start over",
+    next: "Next episode",
+    tracks: "Audio & Subtitles",
+    fullscreen: fullscreen ? "Exit full screen" : "Full screen",
+  };
+  // "Up next" has the screen to itself.
+  const visible = (controls || paused || Boolean(panel) || Boolean(row)) && !pausedIdle && upNext === null;
   const converting = session && (session.decision.video === "transcode" || session.decision.audio === "transcode");
 
   return (
-    <main className={`player ${controls || paused || panel ? "show-controls" : ""}`} onMouseMove={showControls}>
+    <main
+      ref={rootRef}
+      className={`player${visible ? " show-controls" : ""}${pausedIdle ? " is-paused-idle" : ""}`}
+      onMouseMove={showControls}
+    >
       <video
         ref={videoRef}
         className="player-video"
@@ -402,36 +544,82 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
         </div>
       </div>
 
+      {session && !error && upNext === null && (
+        <div className="player-center">
+          <button className={`player-skip${skipped?.dir === -1 ? " is-hit" : ""}`} onClick={() => skip(-1)} aria-label="Back 10 seconds">
+            <SkipIcon dir={-1} />
+            {skipped?.dir === -1 && <span key={skipped.n} className="player-skip-total">−{skipped.total} s</span>}
+          </button>
+          <button className="player-big" onClick={toggle} aria-label={paused ? "Play" : "Pause"}>
+            {!(buffering || switching) && (paused ? <PlayIcon /> : <PauseIcon />)}
+          </button>
+          <button className={`player-skip${skipped?.dir === 1 ? " is-hit" : ""}`} onClick={() => skip(1)} aria-label="Forward 10 seconds">
+            <SkipIcon dir={1} />
+            {skipped?.dir === 1 && <span key={skipped.n} className="player-skip-total">+{skipped.total} s</span>}
+          </button>
+        </div>
+      )}
+
+      {pausedIdle && session && (
+        <div className="player-idle" aria-hidden>
+          <div className="muted">You're watching</div>
+          <div className="player-idle-title">{session.title}</div>
+          {session.subtitle && <div className="player-idle-sub">{session.subtitle}</div>}
+          {session.summary && <p className="player-idle-summary">{session.summary}</p>}
+          <div className="muted small">Paused</div>
+        </div>
+      )}
+
       <div className="player-bottom">
-        <div
-          className="player-bar"
-          role="slider"
-          aria-label="Position"
-          aria-valuemin={0}
-          aria-valuemax={Math.round(duration)}
-          aria-valuenow={Math.round(time)}
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            seek(((e.clientX - r.left) / r.width) * duration - time);
-          }}
-        >
-          <div className="player-bar-fill" style={{ width: `${pct}%` }} />
+        <div className="player-scrub">
+          <span className="player-time">{clock(shown)}</span>
+          <div
+            className={`player-bar${scrub ? " is-hover" : ""}`}
+            role="slider"
+            aria-label="Position"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(time)}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setScrub({ ...scrubAt(e), dragging: true });
+            }}
+            onPointerMove={(e) => setScrub((s) => ({ ...scrubAt(e), dragging: s?.dragging ?? false }))}
+            onPointerUp={(e) => {
+              if (scrub?.dragging) seek(scrubAt(e).t - time);
+              setScrub(e.pointerType === "mouse" ? { ...scrubAt(e), dragging: false } : null);
+            }}
+            onPointerCancel={() => setScrub(null)}
+            onPointerLeave={() => setScrub((s) => (s?.dragging ? s : null))}
+          >
+            <div className="player-bar-track">
+              <div className="player-bar-fill" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="player-bar-knob" style={{ left: `${pct}%` }} />
+            {scrub && duration > 0 && (
+              <div className="player-bar-tip" style={{ left: `${scrub.x}px` }}>
+                {clock(scrub.t)}
+              </div>
+            )}
+          </div>
+          <span className="player-time">−{clock(Math.max(0, duration - shown))}</span>
         </div>
         <div className="player-row">
-          <button className="btn btn-quiet player-toggle" onClick={toggle} aria-label={paused ? "Play" : "Pause"}>
-            {paused ? "▶" : "❚❚"}
-          </button>
-          <span className="player-time">
-            {clock(time)} / {clock(duration)}
-          </span>
           <span className="player-hint muted small">
-            ← → 10 s · Enter play/pause{hasTracks ? " · ↓ audio & subtitles" : ""} · Back exit
+            {row ? "← → choose · Enter select · ↑ back to video" : `← → 10 s · Enter ${paused ? "play" : "pause"} · ↓ more · Back exit`}
           </span>
-          {hasTracks && (
-            <button className="btn btn-quiet" onClick={() => (panel ? setPanel(null) : openPanel())}>
-              Audio &amp; Subtitles
-            </button>
-          )}
+          <div className="player-buttons">
+            {session &&
+              rowButtons.map((b) => (
+                <button
+                  key={b}
+                  className={`btn btn-quiet${row === b ? " is-focused" : ""}${b === "tracks" && panel ? " is-open" : ""}`}
+                  onClick={() => (b === "tracks" && panel ? setPanel(null) : press(b))}
+                >
+                  {rowLabel[b]}
+                </button>
+              ))}
+          </div>
           {session && (
             <span
               className={`pill ${converting ? "pill-requested" : "pill-owned"}`}
@@ -475,15 +663,23 @@ export function Player({ plexKey, offsetMs }: { plexKey: string; offsetMs?: numb
 
       {upNext !== null && session?.next && (
         <div className="up-next" role="dialog" aria-label="Up next">
-          <div className="muted small">Up next in {upNext}s</div>
-          <div className="up-next-title">{session.next.subtitle ?? session.next.title}</div>
-          <div className="actions">
-            <button className={`btn btn-primary ${upNextChoice === 0 ? "is-focused" : ""}`} onClick={playNext}>
-              Play now
-            </button>
-            <button className={`btn ${upNextChoice === 1 ? "is-focused" : ""}`} onClick={exit}>
-              Cancel
-            </button>
+          <div className="up-next-art">
+            {session.next.thumb && <img src={session.next.thumb} alt="" />}
+            <div className="up-next-count" aria-hidden>
+              <div style={{ width: `${((UP_NEXT_S - upNext) / UP_NEXT_S) * 100}%` }} />
+            </div>
+          </div>
+          <div className="up-next-body">
+            <div className="muted small">Next episode in {upNext}</div>
+            <div className="up-next-title">{session.next.subtitle ?? session.next.title}</div>
+            <div className="actions">
+              <button className={`btn btn-primary ${upNextChoice === 0 ? "is-focused" : ""}`} onClick={playNext}>
+                ▶ Play now
+              </button>
+              <button className={`btn ${upNextChoice === 1 ? "is-focused" : ""}`} onClick={exit}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

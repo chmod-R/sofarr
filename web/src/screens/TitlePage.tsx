@@ -224,6 +224,33 @@ function Seasons({
   if (!season) return null;
   const wanted = seasons.filter(requestable);
   const summary = seasonSummary(season);
+  const hasActions = requestable(season) || wanted.length > 1;
+  const bar = (
+    <>
+      <p className="muted season-summary">
+        {seasons.length === 1 && <strong>{season.name}</strong>}
+        {summary}
+        {season.tmdbNumber !== null && <span className="small"> (TMDb season {season.tmdbNumber})</span>}
+      </p>
+      <div className="season-actions">
+        {requestable(season) && (
+          <Focusable className="btn" disabled={busy} onSelect={() => onRequest([season.number])} label={`Get ${season.name}`}>
+            {() => (season.status === "partial" ? `Get the rest of ${season.name}` : `Get ${season.name}`)}
+          </Focusable>
+        )}
+        {wanted.length > 1 && (
+          <Focusable
+            className="btn btn-quiet"
+            disabled={busy}
+            onSelect={() => onRequest(wanted.map((s) => s.number))}
+            label={`Get all ${wanted.length} seasons you don't have`}
+          >
+            {() => (wanted.length === seasons.length ? `Get all ${wanted.length} seasons` : `Get all ${wanted.length} missing seasons`)}
+          </Focusable>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <section className="seasons" aria-label="Episodes">
@@ -243,35 +270,15 @@ function Seasons({
           ))}
         </FocusGroup>
       )}
-      <div className="season-bar">
-        <p className="muted season-summary">
-          {seasons.length === 1 && <strong>{season.name}</strong>}
-          {summary}
-          {season.tmdbNumber !== null && <span className="small"> (TMDb season {season.tmdbNumber})</span>}
-        </p>
-        <FocusGroup className="season-actions" focusKey="season-actions">
-          {requestable(season) && (
-            <Focusable
-              className="btn"
-              disabled={busy}
-              onSelect={() => onRequest([season.number])}
-              label={`Get ${season.name}`}
-            >
-              {() => (season.status === "partial" ? `Get the rest of ${season.name}` : `Get ${season.name}`)}
-            </Focusable>
-          )}
-          {wanted.length > 1 && (
-            <Focusable
-              className="btn btn-quiet"
-              disabled={busy}
-              onSelect={() => onRequest(wanted.map((s) => s.number))}
-              label={`Get all ${wanted.length} seasons you don't have`}
-            >
-              {() => (wanted.length === seasons.length ? `Get all ${wanted.length} seasons` : `Get all ${wanted.length} missing seasons`)}
-            </Focusable>
-          )}
+      {/* The bar itself is the focus group: as wide as the tabs and the list, so Up and Down
+          pass through its buttons instead of skipping past them at the far right. */}
+      {hasActions ? (
+        <FocusGroup className="season-bar" focusKey="season-actions">
+          {bar}
         </FocusGroup>
-      </div>
+      ) : (
+        <div className="season-bar">{bar}</div>
+      )}
       <EpisodeList
         key={season.number}
         detail={detail}

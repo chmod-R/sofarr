@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/routes.js";
 import type { Db } from "../db.js";
+import { plexImageUrl } from "../catalog/titles.js";
 import { UpstreamError } from "../upstreams/http.js";
 import { type Capabilities, chooseProfile, type PlexItem, type PlexPlayback, type StreamProfile, tracksOf } from "./plexPlayback.js";
 
@@ -135,11 +136,12 @@ export function registerPlaybackRoutes(
       src: `/api/play/${s.id}/start.m3u8`,
       ratingKey: s.ratingKey,
       ...label(item),
+      summary: item.summary || null,
       durationMs: s.durationMs,
       startMs: offsetMs,
       decision: { video: decision.video, audio: decision.audio },
       tracks: tracksOf(item),
-      next: next ? { plexKey: next.ratingKey, ...label(next) } : null,
+      next: next ? { plexKey: next.ratingKey, ...label(next), thumb: plexImageUrl(next.thumb ?? null, "backdrop") } : null,
     };
   };
 

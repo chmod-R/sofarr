@@ -193,7 +193,9 @@ it:
   - Stop idle playback sessions after 30 minutes.
 - **Progress** goes to Plex's `/:/timeline` every 10 s and on pause and stop, so resume
   points, watched status and Continue Watching stay in sync with other Plex apps.
-- **Up next:** episodes get a 10 s countdown to the next episode (across seasons).
+- **Up next:** episodes get a 10 s countdown to the next episode (across seasons), with
+  its thumbnail. It appears when the episode ends; showing it over the credits needs
+  credit markers ([planned](https://github.com/chmod-R/sofarr/issues/3)).
 - **Known limitation:** playback sessions live in memory, so restarting Sofarr ends
   in-progress streams.
 
@@ -248,7 +250,14 @@ it:
   Backspace, or the TV's back key (Tizen 10009, webOS 461).
 - Mouse hover only takes focus after a real mouse move, so content scrolling under a
   resting pointer can't steal focus from the D-pad.
-- The player handles keys itself: Enter play/pause, ←/→ 10 s, ↓ audio & subtitles.
+- **Player:** it handles keys itself. On the video: Enter play/pause, ←/→ skip 10 s
+  (repeated presses show the running total), Back exits. ↓ moves to a button row (Start
+  over, Next episode, Audio & Subtitles, Full screen): ←/→ choose, Enter selects, ↑ or
+  Back returns to the video, as does leaving it alone for 8 s. For a mouse or touch
+  there are centre buttons (back 10, play/pause, forward 10) and a scrub bar that shows
+  the time under the pointer and can be dragged. Paused and untouched for 6 s, the
+  controls give way to a "what's playing" screen with the synopsis. At the end of an
+  episode a card with the next episode's thumbnail counts down 10 s.
 - The root font size scales with the viewport, so one layout works on a TV, a laptop
   and a phone.
 - Home refreshes every 60 s (15 s while something downloads); title pages every 10 s

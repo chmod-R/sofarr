@@ -59,7 +59,7 @@ class FakeStream {
     },
     "21": { ratingKey: "21", type: "episode", title: "Pilot", grandparentTitle: "Doctor Who", parentIndex: 1, index: 1, parentRatingKey: "30", grandparentRatingKey: "20", duration: 1_300_000 },
     "22": { ratingKey: "22", type: "episode", title: "Episode Two", grandparentTitle: "Doctor Who", parentIndex: 1, index: 2, parentRatingKey: "30", grandparentRatingKey: "20", duration: 1_300_000, viewOffset: 60_000 },
-    "23": { ratingKey: "23", type: "episode", title: "New Season", grandparentTitle: "Doctor Who", parentIndex: 2, index: 1, parentRatingKey: "31", grandparentRatingKey: "20", duration: 1_300_000 },
+    "23": { ratingKey: "23", type: "episode", title: "New Season", grandparentTitle: "Doctor Who", parentIndex: 2, index: 1, parentRatingKey: "31", grandparentRatingKey: "20", duration: 1_300_000, thumb: "/library/metadata/23/thumb/1" },
   };
   children: Record<string, string[]> = { "20": ["30", "31"], "30": ["21", "22"], "31": ["23"] };
   seasons: Record<string, Record<string, unknown>> = {
@@ -183,7 +183,12 @@ describe("POST /api/play", () => {
     const { play } = await setup();
     const p = (await play({ plexKey: "20" })).json();
     expect(p).toMatchObject({ ratingKey: "22", title: "Doctor Who", subtitle: "S1 · E2 · Episode Two", startMs: 60_000 });
-    expect(p.next).toEqual({ plexKey: "23", title: "Doctor Who", subtitle: "S2 · E1 · New Season" });
+    expect(p.next).toEqual({
+      plexKey: "23",
+      title: "Doctor Who",
+      subtitle: "S2 · E1 · New Season",
+      thumb: "/api/plex/image?path=%2Flibrary%2Fmetadata%2F23%2Fthumb%2F1&w=780&h=439",
+    });
     expect((await play({ plexKey: "21" })).json().next.plexKey).toBe("22");
   });
 

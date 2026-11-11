@@ -55,6 +55,8 @@ export interface PlexItem {
   grandparentRatingKey?: string;
   duration?: number;
   viewOffset?: number;
+  summary?: string;
+  thumb?: string;
   OnDeck?: { Metadata?: PlexItem };
   Media?: Array<{ Part?: Array<{ id: number; Stream?: PlexStream[] }> }>;
 }

@@ -142,6 +142,8 @@ export interface PlaySession {
   ratingKey: string;
   title: string;
   subtitle: string | null;
+  /** Synopsis of what's playing. */
+  summary: string | null;
   durationMs: number;
   startMs: number;
   decision: { video: string; audio: string };
@@ -150,7 +152,7 @@ export interface PlaySession {
     audio: Array<{ id: number; label: string; language: string | null; selected: boolean }>;
     subtitles: Array<{ id: number; label: string; language: string | null; selected: boolean; forced: boolean; kind: "text" | "image" }>;
   };
-  next: { plexKey: string; title: string; subtitle: string | null } | null;
+  next: { plexKey: string; title: string; subtitle: string | null; thumb: string | null } | null;
 }
 
 export interface RequestResult {
