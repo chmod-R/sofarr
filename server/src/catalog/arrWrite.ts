@@ -224,6 +224,8 @@ export interface SonarrEpisode {
   title?: string;
   airDate?: string;
   overview?: string;
+  /** Minutes; 0 when Sonarr doesn't know. */
+  runtime?: number;
   monitored: boolean;
   hasFile: boolean;
 }

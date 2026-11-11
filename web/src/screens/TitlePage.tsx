@@ -1,26 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { EpisodeInfo, MediaType, SeasonEpisodes, SeasonInfo, TitleDetail } from "../api/types";
+import type { EpisodeInfo, MediaType, SeasonEpisodes, SeasonInfo, Title, TitleDetail } from "../api/types";
+import { Card } from "../components/Card";
 import { largeBackdrop } from "../components/art";
 import { FadeImg } from "../components/FadeImg";
 import { downloadLabel, runtime, shortDate, statusLabel } from "../components/format";
-import { TitleSkeleton } from "../components/Skeleton";
+import { EpisodesSkeleton, GridSkeleton, TitleSkeleton } from "../components/Skeleton";
 import { FocusGroup, Focusable, setFocus, useBackKey } from "../nav/focus";
 import { goBack, navigate } from "../router";
 
 const POLL_MS = 10_000;
 
-const SEASON_LABEL: Record<SeasonInfo["status"], string> = {
-  owned: "In your library",
-  partial: "Partly in your library",
-  downloading: "Downloading",
-  requested: "Requested",
-  upcoming: "Not aired yet",
-  available: "",
-};
-
 /** Seasons that make sense to ask for. */
 const requestable = (s: SeasonInfo) => s.status === "available" || s.status === "partial" || s.status === "upcoming";
+
+/** One line about a season: what you have, what you've watched, what's on its way. */
+function seasonSummary(s: SeasonInfo): string {
+  const status: Record<SeasonInfo["status"], string | null> = {
+    owned: null, // the counts already say so
+    partial: null,
+    downloading: "Downloading",
+    requested: "Requested",
+    upcoming: "Not aired yet",
+    available: null,
+  };
+  return [
+    s.episodeCount ? `${s.inPlex ? `${s.inPlex} of ` : ""}${s.episodeCount} episodes${s.inPlex ? " in your library" : ""}` : null,
+    s.inPlex ? (s.watched >= s.inPlex ? "All watched" : s.watched ? `${s.watched} watched` : null) : null,
+    !s.inPlex && s.airDate ? shortDate(s.airDate) : null,
+    status[s.status],
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 function Trailer({ youtubeKey, onClose }: { youtubeKey: string; onClose: () => void }) {
   useBackKey(onClose);
@@ -52,16 +64,79 @@ const minutesLeft = (ms: number) => {
 
 const numberingOf = (d: TitleDetail): "sonarr" | "tmdb" => (d.seasonNumbering === "tmdb" ? "tmdb" : "sonarr");
 
-const EPISODE_LABEL: Record<EpisodeInfo["status"], string> = {
-  owned: "", // ▶ already says it
-  downloading: "Downloading",
-  requested: "Requested",
-  upcoming: "Not aired yet",
-  available: "",
-};
-
 /** Episodes you can still ask for (upcoming ones download when they air). */
 const episodeRequestable = (e: EpisodeInfo) => e.status === "available" || e.status === "upcoming";
+
+/** What Enter does on an episode row, as shown at its right edge. */
+function episodeAction(e: EpisodeInfo, requesting: boolean): { label: string; kind: "play" | "get" | "wait" | "none" } {
+  if (e.plexKey) return { label: e.progress ? "▶ Resume" : "▶ Play", kind: "play" };
+  if (requesting) return { label: "Requesting…", kind: "wait" };
+  switch (e.status) {
+    case "available":
+      return { label: "Get it", kind: "get" };
+    case "upcoming":
+      return { label: "Get when aired", kind: "get" };
+    case "downloading":
+      return { label: "Downloading", kind: "wait" };
+    case "requested":
+      return { label: "Requested", kind: "wait" };
+    default:
+      return { label: "", kind: "none" };
+  }
+}
+
+function EpisodeRow({ e, busy, requesting, onRequest }: { e: EpisodeInfo; busy: boolean; requesting: boolean; onRequest: () => void }) {
+  const action = episodeAction(e, requesting);
+  const facts = [
+    e.progress ? `${minutesLeft(e.progress.remainingMs)} left` : runtime(e.runtime),
+    e.airDate ? shortDate(e.airDate) : null,
+    e.watched && !e.progress ? "Watched" : null,
+  ].filter(Boolean);
+  return (
+    <Focusable
+      className={`episode kind-${action.kind}${e.watched ? " is-watched" : ""}`}
+      label={`Episode ${e.number}, ${e.title}${action.label ? `, ${action.label.replace("▶ ", "")}` : ""}`}
+      disabled={action.kind === "get" && busy}
+      onSelect={() => {
+        if (e.plexKey) navigate({ name: "watch", plexKey: e.plexKey });
+        else if (action.kind === "get") onRequest();
+      }}
+    >
+      {() => (
+        <>
+          <div className="episode-thumb">
+            {e.still ? <FadeImg className="episode-still" src={e.still} lazy /> : <div className="episode-still episode-still-missing" />}
+            {e.plexKey && (
+              <span className="episode-play" aria-hidden>
+                ▶
+              </span>
+            )}
+            {e.watched && !e.progress && (
+              <span className="episode-seen" aria-hidden>
+                ✓
+              </span>
+            )}
+            {e.progress && (
+              <span className="episode-progress" aria-label={`${e.progress.percent}% watched`}>
+                <span style={{ width: `${Math.max(3, e.progress.percent)}%` }} />
+              </span>
+            )}
+          </div>
+          <div className="episode-text">
+            <div className="episode-head">
+              <span className="episode-title">
+                {e.number}. {e.title}
+              </span>
+              <span className="episode-facts muted small">{facts.join(" · ")}</span>
+            </div>
+            {e.overview && <p className="episode-overview">{e.overview}</p>}
+          </div>
+          {action.label && <span className={`episode-action episode-action-${action.kind}`}>{action.label}</span>}
+        </>
+      )}
+    </Focusable>
+  );
+}
 
 function EpisodeList({
   detail,
@@ -78,7 +153,8 @@ function EpisodeList({
 }) {
   const [data, setData] = useState<SeasonEpisodes | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  /** The episode just asked for, until the request has gone through. */
+  const [asked, setAsked] = useState<number | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -90,87 +166,43 @@ function EpisodeList({
       live = false;
     };
   }, [detail, season.number, refreshKey]);
+  useEffect(() => {
+    if (!busy) setAsked(null);
+  }, [busy]);
 
-  if (error) return <p className="muted small episode-note">{error}</p>;
-  if (!data) return <p className="muted small episode-note">Loading episodes…</p>;
-  const first = data.episodes.find((e) => e.status === "available") ?? data.episodes.find(episodeRequestable);
-  const toggle = (n: number) =>
-    setChosen((prev) => {
-      const next = new Set(prev);
-      if (next.has(n)) next.delete(n);
-      else next.add(n);
-      return next;
-    });
+  if (error && !data) return <p className="muted episode-note">{error}</p>;
+  if (!data) return <EpisodesSkeleton count={Math.min(season.episodeCount || 4, 6)} />;
+  if (data.episodes.length === 0) return <p className="muted episode-note">No episodes listed yet.</p>;
 
   return (
-    <div className="episodes">
-      <FocusGroup className="episode-list" focusKey={`episodes:${season.number}`}>
-        {data.episodes.map((e) => {
-          const can = episodeRequestable(e);
-          const on = chosen.has(e.number);
-          return (
-            <Focusable
-              key={e.number}
-              className={`season episode ${on ? "is-on" : ""} season-${e.status} ${e.watched ? "is-watched" : ""}`}
-              label={`Episode ${e.number}, ${e.title}${e.plexKey ? ", play" : on ? ", selected" : ""}`}
-              onSelect={() =>
-                e.plexKey ? navigate({ name: "watch", plexKey: e.plexKey }) : can && toggle(e.number)
-              }
-            >
-              {() => (
-                <>
-                  <span className="season-check" aria-hidden>
-                    {e.watched ? "✓" : e.plexKey ? "▶" : can ? (on ? "☑" : "☐") : e.status === "owned" ? "✓" : "·"}
-                  </span>
-                  <span className="season-name">
-                    {e.number}. {e.title}
-                  </span>
-                  <span className="season-meta muted small">
-                    {[
-                      e.airDate ? shortDate(e.airDate) : null,
-                      e.progress ? `${minutesLeft(e.progress.remainingMs)} left` : e.watched ? "Watched" : EPISODE_LABEL[e.status] || null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                  {e.progress && (
-                    <span className="episode-progress" aria-label={`${e.progress.percent}% watched`}>
-                      <span style={{ width: `${Math.max(3, e.progress.percent)}%` }} />
-                    </span>
-                  )}
-                </>
-              )}
-            </Focusable>
-          );
-        })}
-      </FocusGroup>
-      {data.episodes.some(episodeRequestable) && (
-      <FocusGroup className="actions">
-        {first && (
-          <Focusable
-            className="btn"
-            disabled={busy}
-            onSelect={() => onRequest(season.number, [first.number])}
-            label={`Get episode ${first.number}`}
-          >
-            {() => `Get episode ${first.number}`}
-          </Focusable>
-        )}
-        <Focusable
-          className="btn btn-primary"
-          disabled={chosen.size === 0 || busy}
-          onSelect={() => onRequest(season.number, [...chosen].sort((a, b) => a - b))}
-          label="Get selected episodes"
-        >
-          {() => (busy ? "Requesting…" : chosen.size ? `Get ${chosen.size === 1 ? "1 episode" : `${chosen.size} episodes`}` : "Pick episodes")}
-        </Focusable>
-      </FocusGroup>
-      )}
-    </div>
+    <FocusGroup className="episode-list" focusKey={`episodes:${season.number}`}>
+      {data.episodes.map((e) => (
+        <EpisodeRow
+          key={e.number}
+          e={e}
+          busy={busy}
+          requesting={busy && asked === e.number}
+          onRequest={() => {
+            setAsked(e.number);
+            onRequest(season.number, [e.number]);
+          }}
+        />
+      ))}
+    </FocusGroup>
   );
 }
 
-function SeasonPicker({
+/** The season to open first: the one you're in the middle of, else the first you have, else the first to get. */
+function startSeason(seasons: SeasonInfo[]): number | null {
+  const pick =
+    seasons.find((s) => s.inPlex > 0 && s.watched < s.inPlex) ??
+    seasons.find((s) => s.inPlex > 0) ??
+    seasons.find(requestable) ??
+    seasons[0];
+  return pick?.number ?? null;
+}
+
+function Seasons({
   detail,
   onRequest,
   busy,
@@ -180,108 +212,104 @@ function SeasonPicker({
   busy: boolean;
 }) {
   const seasons = detail.seasons ?? [];
-  const [open, setOpen] = useState<number | null>(null);
-  // Re-fetch the open episode list whenever the title refreshes (progress polling, after a request).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initial = useMemo(() => startSeason(seasons), [detail.id]);
+  const [current, setCurrent] = useState<number | null>(initial);
+  useEffect(() => setCurrent(initial), [initial]);
+  // Re-fetch the episode list whenever the title refreshes (progress polling, after a request).
   const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => setRefreshKey((k) => k + 1), [detail]);
-  // Preselect the first season you don't have yet (usually season 1).
-  const initial = useMemo(() => {
-    const first = seasons.find(requestable);
-    return new Set(first ? [first.number] : []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail.id]);
-  const [chosen, setChosen] = useState<Set<number>>(initial);
-  useEffect(() => setChosen(initial), [initial]);
 
-  const toggle = (n: number) =>
-    setChosen((prev) => {
-      const next = new Set(prev);
-      if (next.has(n)) next.delete(n);
-      else next.add(n);
-      return next;
-    });
+  const season = seasons.find((s) => s.number === current) ?? seasons[0];
+  if (!season) return null;
+  const wanted = seasons.filter(requestable);
+  const summary = seasonSummary(season);
 
-  if (seasons.length === 0) return null;
-  const count = chosen.size;
   return (
-    <section className="seasons" aria-label="Seasons">
-      <h2>Seasons</h2>
-      <FocusGroup className="season-list" focusKey="seasons">
-        {seasons.map((s) => {
-          const can = requestable(s);
-          const on = chosen.has(s.number);
-          const expanded = open === s.number;
-          return (
-            <div key={s.number} className="season-block">
-            <FocusGroup className="season-row" focusKey={`season:${s.number}`}>
+    <section className="seasons" aria-label="Episodes">
+      <h2 className="section-title">Episodes</h2>
+      {seasons.length > 1 && (
+        <FocusGroup className="season-tabs" focusKey="seasons" preferredChildFocusKey={`season:${season.number}`}>
+          {seasons.map((s) => (
             <Focusable
-              className={`season ${on ? "is-on" : ""} season-${s.status} ${s.inPlex > 0 && s.watched >= s.inPlex ? "is-watched" : ""}`}
-              disabled={!can && s.status !== "owned" && s.status !== "partial"}
-              label={`${s.name}${on ? ", selected" : ""}`}
-              onSelect={() => can && toggle(s.number)}
+              key={s.number}
+              focusKey={`season:${s.number}`}
+              className={`btn btn-quiet tab${s.number === season.number ? " is-current" : ""}`}
+              label={s.name}
+              onSelect={() => setCurrent(s.number)}
             >
-              {() => (
-                <>
-                  <span className="season-check" aria-hidden>
-                    {can
-                      ? on
-                        ? "☑"
-                        : "☐"
-                      : s.status === "owned"
-                        ? s.inPlex > 0 && s.watched >= s.inPlex
-                          ? "✓"
-                          : "▶"
-                        : "·"}
-                  </span>
-                  <span className="season-name">
-                    {s.name}
-                    {s.tmdbNumber !== null && <span className="muted small"> (TMDb season {s.tmdbNumber})</span>}
-                  </span>
-                  <span className="season-meta muted small">
-                    {[
-                      s.episodeCount ? `${s.inPlex ? `${s.inPlex}/` : ""}${s.episodeCount} episodes` : null,
-                      s.inPlex ? (s.watched >= s.inPlex ? "All watched" : `${s.watched}/${s.inPlex} watched`) : null,
-                      s.airDate ? shortDate(s.airDate) : null,
-                      // The watched count already implies it's in the library.
-                      s.status === "owned" ? null : SEASON_LABEL[s.status] || null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </>
-              )}
+              {() => s.name}
             </Focusable>
+          ))}
+        </FocusGroup>
+      )}
+      <div className="season-bar">
+        <p className="muted season-summary">
+          {seasons.length === 1 && <strong>{season.name}</strong>}
+          {summary}
+          {season.tmdbNumber !== null && <span className="small"> (TMDb season {season.tmdbNumber})</span>}
+        </p>
+        <FocusGroup className="season-actions" focusKey="season-actions">
+          {requestable(season) && (
             <Focusable
-              className={`btn btn-quiet season-expand ${expanded ? "is-open" : ""}`}
-              label={`${expanded ? "Hide" : "Show"} episodes of ${s.name}`}
-              onSelect={() => setOpen(expanded ? null : s.number)}
+              className="btn"
+              disabled={busy}
+              onSelect={() => onRequest([season.number])}
+              label={`Get ${season.name}`}
             >
-              {() => (expanded ? "Episodes ▾" : "Episodes ›")}
+              {() => (season.status === "partial" ? `Get the rest of ${season.name}` : `Get ${season.name}`)}
             </Focusable>
-            </FocusGroup>
-            {expanded && (
-              <EpisodeList
-                detail={detail}
-                season={s}
-                busy={busy}
-                refreshKey={refreshKey}
-                onRequest={(season, episodes) => onRequest([season], episodes)}
-              />
-            )}
-            </div>
-          );
-        })}
-      </FocusGroup>
-      <FocusGroup className="actions">
-        <Focusable
-          className="btn btn-primary"
-          disabled={count === 0 || busy}
-          onSelect={() => onRequest([...chosen].sort((a, b) => a - b))}
-          label="Get selected seasons"
-        >
-          {() => (busy ? "Requesting…" : count ? `Get ${count === 1 ? "1 season" : `${count} seasons`}` : "Pick a season")}
-        </Focusable>
-      </FocusGroup>
+          )}
+          {wanted.length > 1 && (
+            <Focusable
+              className="btn btn-quiet"
+              disabled={busy}
+              onSelect={() => onRequest(wanted.map((s) => s.number))}
+              label={`Get all ${wanted.length} seasons you don't have`}
+            >
+              {() => (wanted.length === seasons.length ? `Get all ${wanted.length} seasons` : `Get all ${wanted.length} missing seasons`)}
+            </Focusable>
+          )}
+        </FocusGroup>
+      </div>
+      <EpisodeList
+        key={season.number}
+        detail={detail}
+        season={season}
+        busy={busy}
+        refreshKey={refreshKey}
+        onRequest={(n, episodes) => onRequest([n], episodes)}
+      />
+    </section>
+  );
+}
+
+function MoreLikeThis({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId: number }) {
+  const [items, setItems] = useState<Title[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.similar(mediaType, tmdbId).then(
+      (r) => live && setItems(r.results),
+      () => live && setItems([]), // optional: the page is complete without it
+    );
+    return () => {
+      live = false;
+    };
+  }, [mediaType, tmdbId]);
+
+  if (items && items.length === 0) return null;
+  return (
+    <section className="similar" aria-label="More Like This">
+      <h2 className="section-title">More Like This</h2>
+      {items ? (
+        <FocusGroup className="similar-grid" focusKey="similar">
+          {items.map((t) => (
+            <Card key={t.id} item={t} focusKey={`similar:${t.id}`} onFocused={() => undefined} showYear />
+          ))}
+        </FocusGroup>
+      ) : (
+        <GridSkeleton className="similar-grid" count={8} />
+      )}
     </section>
   );
 }
@@ -305,8 +333,16 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
 
   useEffect(() => {
     setDetail(null);
+    window.scrollTo(0, 0);
     void load();
   }, [load]);
+
+  // Requests are answered in a toast: the button that asked may be far down the page.
+  useEffect(() => {
+    if (!message) return;
+    const t = window.setTimeout(() => setMessage(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [message]);
 
   // Keep progress moving while something is on its way.
   useEffect(() => {
@@ -371,14 +407,14 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
   }
   if (!detail) return <TitleSkeleton />;
 
+  const isTv = detail.mediaType === "tv";
+  const seasonCount = detail.seasons?.length ?? 0;
   const meta = [
     detail.year,
-    runtime(detail.runtime),
+    isTv && seasonCount ? `${seasonCount} ${seasonCount === 1 ? "Season" : "Seasons"}` : runtime(detail.runtime),
     detail.genres.slice(0, 3).join(", "),
     detail.rating ? `★ ${detail.rating.toFixed(1)}` : null,
   ].filter(Boolean);
-
-  const isTv = detail.mediaType === "tv";
   const primary = (() => {
     switch (detail.status) {
       case "owned":
@@ -418,7 +454,15 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
         </h1>
         {detail.tagline && <p className="title-tagline">{detail.tagline}</p>}
         <div className="hero-meta">
-          {meta.map((m) => (
+          {meta.slice(0, 1).map((m) => (
+            <span key={String(m)}>{m}</span>
+          ))}
+          {detail.certification && (
+            <span className="cert" aria-label={`Rated ${detail.certification}`}>
+              {detail.certification}
+            </span>
+          )}
+          {meta.slice(1).map((m) => (
             <span key={String(m)}>{m}</span>
           ))}
           <span className={`pill pill-${detail.status}`}>{statusLabel(detail)}</span>
@@ -429,6 +473,12 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
           </div>
         )}
         <p className="title-overview">{detail.overview}</p>
+        {detail.cast.length > 0 && (
+          <p className="title-cast">
+            <span className="muted">Starring </span>
+            {detail.cast.join(", ")}
+          </p>
+        )}
 
         <FocusGroup className="actions" focusKey="title-actions">
           {primary && (
@@ -445,13 +495,16 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
             {() => "Back"}
           </Focusable>
         </FocusGroup>
-        {message && (
-          <p className="title-message" role="status">
-            {message}
-          </p>
-        )}
-        {isTv && <SeasonPicker detail={detail} busy={busy} onRequest={(s, e) => void request(s, e)} />}
       </div>
+      <div className="title-more">
+        {isTv && <Seasons detail={detail} busy={busy} onRequest={(s, e) => void request(s, e)} />}
+        <MoreLikeThis mediaType={detail.mediaType} tmdbId={detail.tmdbId} />
+      </div>
+      {message && (
+        <p className="toast" role="status">
+          {message}
+        </p>
+      )}
       {trailer && detail.trailerYoutubeKey && (
         <Trailer
           youtubeKey={detail.trailerYoutubeKey}

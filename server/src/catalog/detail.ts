@@ -2,8 +2,13 @@ import type { Arr, ArrEntry } from "./arr.js";
 import type { Season as SonarrSeason, SonarrWriter } from "./arrWrite.js";
 import type { PlexServer } from "./plex.js";
 import { mapSeasons, type SeasonMapping } from "./seasonMap.js";
-import { fromTmdb, type StatusContext, type Title } from "./titles.js";
+import { mapLimit } from "./cache.js";
+import { goodRec } from "./home.js";
+import { fromTmdb, type HomeRelease, type StatusContext, type Title } from "./titles.js";
 import type { MediaType, Tmdb, TmdbFull } from "./tmdb.js";
+
+/** How many "More Like This" titles a title page shows. */
+const SIMILAR_MAX = 12;
 
 export type SeasonStatus = "owned" | "partial" | "downloading" | "requested" | "upcoming" | "available";
 
@@ -32,6 +37,10 @@ export interface TitleDetail extends Title {
   trailerYoutubeKey: string | null;
   /** Title logo artwork (TMDb), shown in place of the plain-text title. */
   logo: string | null;
+  /** Age rating in the configured region, e.g. "PG-13" or "TV-MA". */
+  certification: string | null;
+  /** The first few billed cast names. */
+  cast: string[];
   seasons?: SeasonInfo[];
   /** How `seasons[].number` relates to TMDb: same, shifted, or Sonarr's numbering only. */
   seasonNumbering?: SeasonMapping["kind"] | "tmdb";
@@ -158,6 +167,8 @@ export async function buildDetail(
     runtime: full.runtime,
     trailerYoutubeKey: full.trailerYoutubeKey,
     logo: full.logo,
+    certification: full.certification,
+    cast: full.cast,
   };
 
   if (mediaType === "tv") {
@@ -177,4 +188,38 @@ export async function buildDetail(
     });
   }
   return detail;
+}
+
+/**
+ * "More Like This": TMDb's recommendations for a title, with the same quality bar
+ * and status merge as the home rows. Separate from the details so a title page
+ * doesn't wait for it.
+ */
+export async function buildSimilar(
+  deps: Pick<DetailDeps, "plex" | "arr" | "tmdb" | "now">,
+  serverToken: string,
+  mediaType: MediaType,
+  tmdbId: number,
+): Promise<Title[]> {
+  const today = (deps.now?.() ?? new Date()).toISOString().slice(0, 10);
+  const [recs, library, arr] = await Promise.all([
+    deps.tmdb.recommendations(mediaType, tmdbId),
+    deps.plex.library(serverToken),
+    deps.arr.entries(),
+  ]);
+  const items = recs.filter(goodRec).filter((i) => i.tmdbId !== tmdbId).slice(0, SIMILAR_MAX);
+  const ctx: StatusContext = { library, arr, today, release: new Map() };
+  // Home-release lookups only for movies we'd otherwise offer to get; a failed one just means "available".
+  const lookups = items.filter((i) => {
+    const k = `movie:${i.tmdbId}`;
+    return i.mediaType === "movie" && !library.byTmdb.has(k) && !arr.has(k);
+  });
+  const releases = await mapLimit(lookups, 8, (i) =>
+    deps.tmdb.homeRelease(i.tmdbId).catch((): HomeRelease | undefined => undefined),
+  );
+  lookups.forEach((i, n) => {
+    const r = releases[n];
+    if (r) ctx.release!.set(i.tmdbId, r);
+  });
+  return items.map((i) => fromTmdb(i, ctx));
 }

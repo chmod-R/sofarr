@@ -50,6 +50,10 @@ interface RawFull extends RawItem {
   seasons?: Array<{ season_number: number; name: string; episode_count: number; air_date?: string | null }>;
   videos?: { results: Array<{ site: string; type: string; key: string; official?: boolean }> };
   images?: RawImages;
+  credits?: { cast?: Array<{ name: string }> };
+  aggregate_credits?: { cast?: Array<{ name: string }> };
+  release_dates?: ReleaseDates;
+  content_ratings?: { results: Array<{ iso_3166_1: string; rating?: string }> };
 }
 
 interface RawImages {
@@ -63,13 +67,28 @@ export interface TmdbFull extends TmdbItem {
   trailerYoutubeKey: string | null;
   /** Title logo (transparent artwork of the title's name), when TMDb has one. */
   logo: string | null;
+  /** Age rating in the configured region ("PG-13", "TV-MA"), when TMDb knows it. */
+  certification: string | null;
+  /** The first few billed cast names. */
+  cast: string[];
   lastAirDate: string | null;
   tvdbId: number | null;
   seasons: Array<{ number: number; name: string; episodeCount: number; airDate: string | null }>;
 }
 
 interface ReleaseDates {
-  results: Array<{ iso_3166_1: string; release_dates: Array<{ type: number; release_date: string }> }>;
+  results: Array<{ iso_3166_1: string; release_dates: Array<{ type: number; release_date: string; certification?: string }> }>;
+}
+
+export interface TmdbEpisode {
+  number: number;
+  title: string;
+  airDate: string | null;
+  overview: string;
+  /** A frame from the episode. */
+  still: string | null;
+  /** Minutes. */
+  runtime: number | null;
 }
 
 export function posterUrl(path: string | null, size = "w342"): string | null {
@@ -133,16 +152,26 @@ export class Tmdb {
   }
 
   private get<T>(path: string, params: Record<string, string> = {}, ttlMs = 6 * HOUR): Promise<T> {
+    return this.getAs<T, T>(path, params, ttlMs, (raw) => raw);
+  }
+
+  /**
+   * Like `get`, but caches what `pick` keeps instead of the whole answer: detail
+   * responses with cast and image lists are large, and only a few fields are used.
+   */
+  private getAs<Raw, T>(path: string, params: Record<string, string>, ttlMs: number, pick: (raw: Raw) => T): Promise<T> {
     const u = new URL(`${API}${path}`);
     u.searchParams.set("language", this.opts.language);
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
     const cacheKey = `tmdb:${u.pathname}?${u.searchParams}`;
     if (!this.bearer) u.searchParams.set("api_key", this.apiKey);
-    return this.cache.get(cacheKey, ttlMs, () =>
-      requestJson<T>(this.fetch, u.toString(), {
-        timeoutMs: this.opts.timeoutMs,
-        headers: this.bearer ? { Authorization: `Bearer ${this.apiKey}` } : {},
-      }),
+    return this.cache.get(cacheKey, ttlMs, async () =>
+      pick(
+        await requestJson<Raw>(this.fetch, u.toString(), {
+          timeoutMs: this.opts.timeoutMs,
+          headers: this.bearer ? { Authorization: `Bearer ${this.apiKey}` } : {},
+        }),
+      ),
     );
   }
 
@@ -169,16 +198,31 @@ export class Tmdb {
   }
 
   /** Everything the title page needs, in one request. */
-  async fullDetails(mediaType: MediaType, tmdbId: number): Promise<TmdbFull> {
-    const raw = await this.get<RawFull>(
+  fullDetails(mediaType: MediaType, tmdbId: number): Promise<TmdbFull> {
+    return this.getAs<RawFull, TmdbFull>(
       `/${mediaType}/${tmdbId}`,
       {
-        append_to_response: mediaType === "tv" ? "videos,images,external_ids" : "videos,images",
+        append_to_response:
+          mediaType === "tv"
+            ? "videos,images,aggregate_credits,content_ratings,external_ids"
+            : "videos,images,credits,release_dates",
         // Without this, appended images are limited to the request language and miss neutral ones.
         include_image_language: `${this.imageLanguage},null`,
       },
       24 * HOUR,
+      (raw) => this.toFull(raw, mediaType),
     );
+  }
+
+  private toFull(raw: RawFull, mediaType: MediaType): TmdbFull {
+    const region = this.opts.region;
+    const certification =
+      mediaType === "tv"
+        ? raw.content_ratings?.results.find((r) => r.iso_3166_1 === region)?.rating
+        : raw.release_dates?.results
+            .find((r) => r.iso_3166_1 === region)
+            ?.release_dates.map((d) => d.certification)
+            .find(Boolean);
     const trailer =
       raw.videos?.results.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official) ??
       raw.videos?.results.find((v) => v.site === "YouTube" && v.type === "Trailer") ??
@@ -190,6 +234,8 @@ export class Tmdb {
       runtime: raw.runtime ?? raw.episode_run_time?.[0] ?? (raw.last_episode_to_air?.runtime || null),
       trailerYoutubeKey: trailer?.key ?? null,
       logo: pickLogo(raw.images, this.imageLanguage),
+      certification: certification || null,
+      cast: ((mediaType === "tv" ? raw.aggregate_credits : raw.credits)?.cast ?? []).slice(0, 4).map((c) => c.name),
       lastAirDate: raw.last_air_date ?? null,
       tvdbId: raw.external_ids?.tvdb_id ?? null,
       seasons: (raw.seasons ?? [])
@@ -206,26 +252,35 @@ export class Tmdb {
   async seasonEpisodes(
     tmdbId: number,
     season: number,
-  ): Promise<Array<{ number: number; title: string; airDate: string | null; overview: string }>> {
+  ): Promise<TmdbEpisode[]> {
     const body = await this.get<{
-      episodes?: Array<{ episode_number: number; name?: string; air_date?: string | null; overview?: string }>;
+      episodes?: Array<{
+        episode_number: number;
+        name?: string;
+        air_date?: string | null;
+        overview?: string;
+        still_path?: string | null;
+        runtime?: number | null;
+      }>;
     }>(`/tv/${tmdbId}/season/${season}`, {}, 6 * HOUR);
     return (body.episodes ?? []).map((e) => ({
       number: e.episode_number,
       title: e.name ?? `Episode ${e.episode_number}`,
       airDate: e.air_date ?? null,
       overview: e.overview ?? "",
+      still: e.still_path ? `${IMG}/w300${e.still_path}` : null,
+      runtime: e.runtime || null,
     }));
   }
 
   /** A title's logo on its own: light enough to look up for whatever is in focus. */
-  async logo(mediaType: MediaType, tmdbId: number): Promise<string | null> {
-    const body = await this.get<RawImages>(
+  logo(mediaType: MediaType, tmdbId: number): Promise<string | null> {
+    return this.getAs<RawImages, string | null>(
       `/${mediaType}/${tmdbId}/images`,
       { include_image_language: `${this.imageLanguage},null` },
       24 * HOUR,
+      (raw) => pickLogo(raw, this.imageLanguage),
     );
-    return pickLogo(body, this.imageLanguage);
   }
 
   async tvdbId(tmdbId: number): Promise<number | null> {

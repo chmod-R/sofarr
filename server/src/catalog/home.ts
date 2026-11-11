@@ -59,7 +59,7 @@ function softFail(warnings: string[]) {
 
 const emptyLibrary = (): PlexLibrary => ({ byTmdb: new Map(), byRatingKey: new Map() });
 
-const goodRec = (i: TmdbItem) => !i.adult && i.voteCount >= MIN_VOTES && i.voteAverage >= MIN_RATING;
+export const goodRec = (i: TmdbItem) => !i.adult && i.voteCount >= MIN_VOTES && i.voteAverage >= MIN_RATING;
 
 export async function buildHome(deps: HomeDeps, serverToken: string): Promise<HomeResult> {
   const warnings: string[] = [];

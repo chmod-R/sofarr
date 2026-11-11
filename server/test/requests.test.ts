@@ -181,7 +181,18 @@ function tmdbRoutes(): Array<[string | RegExp, Handler]> {
     (u) =>
       u.searchParams.get("api_key") === tmdbKey ? json(b) : json({}, 401);
   return [
-    [`${TMDB}/movie/603`, ok({ id: 603, title: "The Matrix", release_date: "1999-03-31", genres: [{ name: "Action" }], runtime: 136, videos: { results: [{ site: "YouTube", type: "Trailer", key: "vKQi3bBA1y8", official: true }] }, images: { logos: matrixLogos } })],
+    [`${TMDB}/movie/603`, ok({ id: 603, title: "The Matrix", release_date: "1999-03-31", genres: [{ name: "Action" }], runtime: 136, videos: { results: [{ site: "YouTube", type: "Trailer", key: "vKQi3bBA1y8", official: true }] }, images: { logos: matrixLogos }, credits: { cast: ["Ann", "Bo", "Cy", "Di", "Ed"].map((name) => ({ name })) }, release_dates: { results: [{ iso_3166_1: "GB", release_dates: [{ type: 3, release_date: "1999-06-11", certification: "15" }] }, { iso_3166_1: "US", release_dates: [{ type: 1, release_date: "1999-03-24", certification: "" }, { type: 3, release_date: "1999-03-31", certification: "R" }] }] } })],
+    [
+      `${TMDB}/movie/603/recommendations`,
+      ok({
+        results: [
+          { id: 813, title: "Casablanca", release_date: "1980-07-02", vote_average: 8, vote_count: 900 },
+          { id: 500, title: "Unmonitored", release_date: "1990-01-01", vote_average: 7, vote_count: 500 },
+          { id: 9001, title: "Barely Rated", release_date: "2001-01-01", vote_average: 9, vote_count: 3 },
+        ],
+      }),
+    ],
+    [`${TMDB}/movie/813/release_dates`, ok({ results: [] })],
     [`${TMDB}/movie/603/images`, ok({ logos: matrixLogos })],
     [`${TMDB}/movie/813/images`, ok({ logos: [] })],
     [`${TMDB}/movie/603/release_dates`, ok({ results: [] })],
@@ -242,7 +253,7 @@ function tmdbRoutes(): Array<[string | RegExp, Handler]> {
       `${TMDB}/tv/1396/season/1`,
       ok({
         episodes: [
-          { episode_number: 1, name: "Pilot", air_date: "2008-01-20" },
+          { episode_number: 1, name: "Pilot", air_date: "2008-01-20", still_path: "/pilot.jpg", runtime: 58 },
           { episode_number: 2, name: "Cat's in the Bag...", air_date: "2008-01-27" },
         ],
       }),
@@ -475,8 +486,8 @@ describe("episodes", () => {
     const { app, cookie } = await setup();
     const r = (await app.inject({ url: "/api/titles/tv/1396/seasons/1?numbering=tmdb", headers: { cookie } })).json();
     expect(r.episodes).toEqual([
-      { number: 1, title: "Pilot", airDate: "2008-01-20", overview: "", status: "available" },
-      { number: 2, title: "Cat's in the Bag...", airDate: "2008-01-27", overview: "", status: "available" },
+      { number: 1, title: "Pilot", airDate: "2008-01-20", overview: "", still: "https://image.tmdb.org/t/p/w300/pilot.jpg", runtime: 58, status: "available" },
+      { number: 2, title: "Cat's in the Bag...", airDate: "2008-01-27", overview: "", still: null, runtime: null, status: "available" },
     ]);
   });
 
@@ -597,7 +608,19 @@ describe("GET /api/titles/:mediaType/:tmdbId", () => {
       runtime: 136,
       trailerYoutubeKey: "vKQi3bBA1y8",
       logo: "https://image.tmdb.org/t/p/w500/en-top.png",
+      certification: "R",
+      cast: ["Ann", "Bo", "Cy", "Di"],
     });
+  });
+
+  it("/similar lists well-rated recommendations with their status", async () => {
+    const { app, cookie } = await setup();
+    const res = await app.inject({ url: "/api/titles/movie/603/similar", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().results.map((t: { id: string; status: string }) => `${t.id}:${t.status}`)).toEqual([
+      "movie:813:downloading", // Radarr has the file; Plex hasn't scanned it yet
+      "movie:500:requested",
+    ]);
   });
 
   it("has no logo when TMDb has none", async () => {

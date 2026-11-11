@@ -2,7 +2,8 @@ import { UpstreamError } from "../upstreams/http.js";
 import type { SonarrWriter } from "./arrWrite.js";
 import type { PlexEpisodeState, PlexServer } from "./plex.js";
 import { mapSeasons } from "./seasonMap.js";
-import type { Tmdb } from "./tmdb.js";
+import { plexImageUrl } from "./titles.js";
+import type { Tmdb, TmdbEpisode } from "./tmdb.js";
 
 export type EpisodeStatus = "owned" | "downloading" | "requested" | "upcoming" | "available";
 
@@ -11,6 +12,10 @@ export interface EpisodeInfo {
   title: string;
   airDate: string | null;
   overview: string;
+  /** A frame from the episode (TMDb's, else Plex's own when it's in the library). */
+  still: string | null;
+  /** Minutes, when known. */
+  runtime: number | null;
   status: EpisodeStatus;
   /** Plex ratingKey when the episode is in the profile's library (playable). */
   plexKey?: string;
@@ -83,10 +88,12 @@ export async function buildEpisodes(
         .episodeNumbers(serverToken, plexShowKey, plexSeason)
         .catch(() => new Map<number, PlexEpisodeState>())
     : new Map<number, PlexEpisodeState>();
-  const withKey = <T extends { number: number }>(e: T): T & Pick<EpisodeInfo, "plexKey" | "watched" | "progress"> => {
+  const withKey = <T extends { number: number; still: string | null; runtime: number | null }>(e: T): T & Pick<EpisodeInfo, "plexKey" | "watched" | "progress"> => {
     const p = inPlex.get(e.number);
     if (!p) return e;
     const out: T & Pick<EpisodeInfo, "plexKey" | "watched" | "progress"> = { ...e, plexKey: p.ratingKey, watched: p.watched };
+    out.still ??= plexImageUrl(p.thumb, "still");
+    out.runtime ??= p.duration > 0 ? Math.round(p.duration / 60_000) : null;
     if (p.viewOffset > 0 && p.duration > 0) {
       out.progress = {
         percent: Math.min(99, Math.round((p.viewOffset / p.duration) * 100)),
@@ -104,6 +111,12 @@ export async function buildEpisodes(
       deps.sonarr.queuedEpisodeIds(existing.id!),
     ]);
     if (eps.length) {
+      // Sonarr's list has no artwork: take stills (and missing runtimes) from TMDb's matching season.
+      const art = new Map<number, TmdbEpisode>();
+      if (tmdbSeason !== undefined) {
+        const list = await deps.tmdb.seasonEpisodes(tmdbId, tmdbSeason).catch(() => []);
+        for (const e of list) art.set(e.number, e);
+      }
       return {
         season,
         numbering,
@@ -117,6 +130,8 @@ export async function buildEpisodes(
               title: e.title ?? `Episode ${e.episodeNumber}`,
               airDate,
               overview: e.overview ?? "",
+              still: art.get(e.episodeNumber)?.still ?? null,
+              runtime: e.runtime || art.get(e.episodeNumber)?.runtime || null,
               status: episodeStatus(
                 { airDate },
                 { inPlex: inPlex.has(e.episodeNumber), hasFile: e.hasFile, queued: queued.has(e.id), monitored: e.monitored },

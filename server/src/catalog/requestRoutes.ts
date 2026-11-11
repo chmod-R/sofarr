@@ -6,7 +6,7 @@ import { UpstreamError } from "../upstreams/http.js";
 import type { Arr } from "./arr.js";
 import type { RadarrWriter, SonarrWriter } from "./arrWrite.js";
 import { mapSeasons } from "./seasonMap.js";
-import { buildDetail } from "./detail.js";
+import { buildDetail, buildSimilar } from "./detail.js";
 import { buildEpisodes } from "./episodes.js";
 import type { PlexServer } from "./plex.js";
 import type { Tmdb } from "./tmdb.js";
@@ -105,6 +105,23 @@ export function registerRequestRoutes(app: FastifyInstance, deps: RequestDeps): 
       const logo = await deps.tmdb.logo(p.data.mediaType, p.data.tmdbId);
       // Logos rarely change; let the browser keep the answer too.
       return reply.header("cache-control", "private, max-age=86400").send({ logo });
+    } catch (err) {
+      if (err instanceof UpstreamError && err.status === 404) {
+        return reply.code(404).send({ error: "unknown_title" });
+      }
+      return upstream(reply, err, "catalog");
+    }
+  });
+
+  /** "More Like This" for a title page. */
+  app.get("/api/titles/:mediaType/:tmdbId/similar", { preHandler: needProfile }, async (request, reply) => {
+    const p = titleParams.safeParse(request.params);
+    if (!p.success) return reply.code(400).send({ error: "invalid_title" });
+    if (!deps.tmdb) return reply.code(503).send({ error: "tmdb_not_configured" });
+    const token = request.auth!.profile!.server_token;
+    if (!token) return reply.code(409).send({ error: "profile_not_ready" });
+    try {
+      return { results: await buildSimilar({ ...deps, tmdb: deps.tmdb }, token, p.data.mediaType, p.data.tmdbId) };
     } catch (err) {
       if (err instanceof UpstreamError && err.status === 404) {
         return reply.code(404).send({ error: "unknown_title" });

@@ -27,6 +27,8 @@ export interface PlexEpisodeState {
   /** ms into the episode (in progress); 0 if not started. */
   viewOffset: number;
   duration: number;
+  /** Plex's own frame from the episode. */
+  thumb: string | null;
 }
 
 /** A Continue Watching entry. For episodes, `show` points at the parent show. */
@@ -225,7 +227,7 @@ export class PlexServer {
     const s = (seasons.MediaContainer.Metadata ?? []).find((x) => x.index === season);
     if (!s) return new Map();
     const eps = await this.get<
-      Container<"Metadata", { index?: number; ratingKey: string; viewCount?: number; viewOffset?: number; duration?: number }>
+      Container<"Metadata", { index?: number; ratingKey: string; viewCount?: number; viewOffset?: number; duration?: number; thumb?: string }>
     >(
       token,
       `/library/metadata/${encodeURIComponent(s.ratingKey)}/children`,
@@ -242,6 +244,7 @@ export class PlexServer {
                   watched: (e.viewCount ?? 0) > 0,
                   viewOffset: e.viewOffset ?? 0,
                   duration: e.duration ?? 0,
+                  thumb: e.thumb ?? null,
                 },
               ],
             ]

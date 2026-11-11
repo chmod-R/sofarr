@@ -52,6 +52,7 @@ export const api = {
   library: () => call<Home>("GET", "/api/library"),
   title: (mediaType: string, tmdbId: number) => call<TitleDetail>("GET", `/api/titles/${mediaType}/${tmdbId}`),
   logo: (mediaType: string, tmdbId: number) => call<{ logo: string | null }>("GET", `/api/titles/${mediaType}/${tmdbId}/logo`),
+  similar: (mediaType: string, tmdbId: number) => call<{ results: Title[] }>("GET", `/api/titles/${mediaType}/${tmdbId}/similar`),
   episodes: (tmdbId: number, season: number, numbering: "sonarr" | "tmdb") =>
     call<SeasonEpisodes>("GET", `/api/titles/tv/${tmdbId}/seasons/${season}?numbering=${numbering}`),
   requestEpisodes: (tmdbId: number, season: number, episodes: number[], seasonNumbering: "sonarr" | "tmdb") =>

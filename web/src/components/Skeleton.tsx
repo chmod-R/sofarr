@@ -91,3 +91,19 @@ export function TitleSkeleton() {
     </main>
   );
 }
+
+export function EpisodesSkeleton({ count }: { count: number }) {
+  return (
+    <div className="episode-list" aria-hidden>
+      {Array.from({ length: count }, (_, n) => (
+        <div key={n} className="episode">
+          <div className="episode-thumb skel" style={delay(n)} />
+          <div className="episode-text">
+            <div className="skel skel-heading" style={delay(n)} />
+            <SkeletonText lines={2} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

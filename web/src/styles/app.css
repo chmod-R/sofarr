@@ -723,7 +723,7 @@ p {
 }
 .title-body {
   position: relative;
-  padding: 18vh var(--gutter) 4rem;
+  padding: 18vh var(--gutter) 0;
   max-width: 52rem;
 }
 .title-name {
@@ -761,52 +761,240 @@ p {
   background: var(--info);
   transition: width 400ms ease;
 }
-.title-message {
-  margin-top: 1rem;
-  color: var(--warn);
+.title-cast {
+  margin-top: 0.8rem;
+  max-width: 44rem;
+  font-size: 0.95rem;
+}
+/* Age rating, boxed as on a poster. */
+.cert {
+  padding: 0 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 0.2rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 2rem;
+  z-index: 40;
+  transform: translateX(-50%);
+  max-width: min(44rem, calc(100vw - 2 * var(--gutter)));
+  padding: 0.8rem 1.3rem;
+  border-radius: var(--radius);
+  background: rgba(25, 27, 34, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.6);
   font-weight: 600;
+  animation: fade 200ms ease;
 }
 
+/* Below the fold: episodes and More Like This, on a solid page instead of the artwork. */
+.title-more {
+  position: relative;
+  padding: 3rem var(--gutter) 5rem;
+  background: linear-gradient(to bottom, rgba(14, 15, 19, 0) 0, var(--bg) 3rem);
+}
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.9rem;
+}
 .seasons {
-  margin-top: 2.5rem;
+  max-width: 64rem;
+  margin-bottom: 3rem;
 }
-.seasons h2 {
-  font-size: 1.3rem;
-  margin-bottom: 0.75rem;
+.season-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 -0.6rem 0.8rem;
+  padding: 0.5rem 0.6rem; /* room for the focus ring */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.season-list {
+.season-tabs::-webkit-scrollbar {
+  display: none;
+}
+.season-tabs .tab {
+  flex: none;
+  white-space: nowrap;
+}
+.season-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  min-height: 2.8rem;
+  margin-bottom: 0.8rem;
+}
+.season-summary strong {
+  color: var(--text);
+  margin-right: 0.8rem;
+}
+.season-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.season-actions .btn {
+  padding: 0.5rem 1.1rem;
+}
+
+.episode-list {
   display: grid;
-  gap: 0.35rem;
-  max-width: 40rem;
+  gap: 0.3rem;
 }
-.season {
+.episode {
   display: grid;
-  grid-template-columns: 1.6rem 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 0.75rem;
-  padding: 0.6rem 0.9rem;
+  grid-template-columns: clamp(8rem, 16vw, 13rem) 1fr auto;
+  align-items: center;
+  gap: 1.3rem;
+  padding: 0.7rem;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   cursor: pointer;
+  scroll-margin: 6rem 0;
   transition: background 120ms ease, box-shadow 120ms ease;
 }
-.season.is-focused {
+.episode.is-focused {
   background: var(--bg-hover);
   box-shadow: var(--focus);
+  border-bottom-color: transparent;
 }
-.season.is-on {
-  background: rgba(240, 166, 64, 0.16);
+.episode.is-disabled,
+.episode.kind-none,
+.episode.kind-wait {
+  cursor: default;
 }
-.season-check {
-  grid-row: span 2;
-  font-size: 1.2rem;
+.episode-thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  background: var(--bg-raised);
+}
+.episode-still {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.episode-still-missing {
+  background: linear-gradient(135deg, #2a2d38, #191b22);
+}
+/* Episodes you don't have yet are dimmed until they're playable. */
+.episode:not(.kind-play) .episode-still {
+  filter: grayscale(0.6) brightness(0.6);
+}
+.episode-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.episode.is-focused .episode-play {
+  opacity: 1;
+}
+.episode-seen {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  background: var(--ok);
+  color: #06210f;
+}
+.episode-progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0.25rem;
+  background: rgba(255, 255, 255, 0.3);
+}
+.episode-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.episode-text {
+  min-width: 0;
+}
+.episode-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 1rem;
+}
+.episode-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.episode.is-watched .episode-title {
+  color: var(--muted);
+}
+.episode-overview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 0.3rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: #c3c5cd;
+}
+.episode-action {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.episode-action-play {
+  color: var(--text);
+}
+.episode-action-get {
+  background: rgba(240, 166, 64, 0.2);
   color: var(--accent);
 }
-.season-owned .season-check {
-  color: var(--ok);
+.episode.is-focused .episode-action-get {
+  background: var(--accent);
+  color: var(--accent-ink);
 }
-.season-name {
-  font-weight: 600;
+.episode.is-focused .episode-action-play {
+  background: var(--text);
+  color: var(--bg);
+}
+.episode-note {
+  padding: 1rem 0;
+}
+.similar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+  gap: 1.1rem 0.9rem;
+}
+.similar-grid .card {
+  flex: none;
+  scroll-margin: 4rem 0;
+}
+@media (max-width: 760px) {
+  .episode {
+    grid-template-columns: 7rem 1fr;
+    gap: 0.8rem;
+  }
+  .episode-action {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 
 /* ---------- Trailer overlay ---------- */
@@ -832,44 +1020,6 @@ p {
     transition: none !important;
     animation: none !important;
   }
-}
-
-/* Season rows with an Episodes toggle, and the episode list */
-.season-block {
-  display: grid;
-  gap: 0.35rem;
-}
-.season-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-.season-expand {
-  white-space: nowrap;
-  font-size: 0.9rem;
-}
-.season-expand.is-open {
-  color: var(--accent);
-}
-.episodes {
-  margin: 0.2rem 0 0.8rem 2.2rem;
-}
-.episode-list {
-  display: grid;
-  gap: 0.25rem;
-}
-.episode {
-  padding: 0.45rem 0.8rem;
-}
-.episode .season-name {
-  font-weight: 500;
-}
-.episodes .actions {
-  margin-top: 0.8rem;
-}
-.episode-note {
-  margin: 0.3rem 0 0.6rem 2.2rem;
 }
 
 /* ---------- Player ---------- */
@@ -981,35 +1131,6 @@ p {
   font-size: 1.2rem;
   font-weight: 700;
   margin-top: 0.25rem;
-}
-
-/* Episode watch state */
-.episode.is-watched .season-check {
-  color: var(--ok);
-}
-.episode.is-watched .season-name {
-  color: var(--muted);
-}
-.episode-progress {
-  grid-column: 2;
-  display: block;
-  height: 0.2rem;
-  margin-top: 0.35rem;
-  max-width: 14rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  overflow: hidden;
-}
-.episode-progress > span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-.season-owned .season-check {
-  color: var(--accent); /* ▶ in your library, not finished */
-}
-.season.is-watched .season-check {
-  color: var(--ok); /* ✓ all watched */
 }
 
 /* ---------- Search ---------- */

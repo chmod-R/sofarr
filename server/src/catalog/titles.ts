@@ -31,9 +31,9 @@ export interface Title {
 }
 
 /** Proxied, resized Plex artwork (the browser never sees a Plex token). */
-export function plexImageUrl(path: string | null, kind: "poster" | "backdrop"): string | null {
+export function plexImageUrl(path: string | null, kind: "poster" | "backdrop" | "still"): string | null {
   if (!path) return null;
-  const [w, h] = kind === "poster" ? [342, 513] : [780, 439];
+  const [w, h] = kind === "poster" ? [342, 513] : kind === "still" ? [300, 169] : [780, 439];
   return `/api/plex/image?path=${encodeURIComponent(path)}&w=${w}&h=${h}`;
 }
 

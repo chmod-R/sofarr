@@ -105,6 +105,8 @@ but not yet scanned by Plex) > `requested` (tracked by *arr, nothing downloading
 - **Search** (`/api/search`): TMDb multi-search with people dropped and near-empty
   entries last, then the same status merge. Library titles without TMDb artwork use
   Plex's.
+- **Detail responses are trimmed before caching.** TMDb's details with cast, ratings
+  and image lists appended are large; only the fields Sofarr uses are kept in memory.
 - **Caching** (in memory, with in-flight de-duplication): TMDb 6 h (details and
   release dates 24 h), Plex library 60 s, Continue Watching and *arr 30 s. Plex data is
   dropped when playback pauses or stops, so watch state shows up immediately.
@@ -228,6 +230,18 @@ it:
 - **Header:** overlays the artwork with a shade and turns solid once the page scrolls
   (My Library). Search is an icon; the avatar opens a menu (Switch profile, Sign out)
   that holds focus until closed.
+- **Title pages:** logo, year, age rating (the configured region's certification),
+  runtime or season count, genres, rating, status, overview and the first billed cast.
+  Shows list one season at a time: season tabs, a line about what you have and have
+  watched, then a row per episode with a still, runtime, air date, synopsis and watch
+  progress. Enter on a row plays the episode or requests it; "Get Season N" and "Get
+  all missing seasons" cover bulk requests. The page opens on the season you're in the
+  middle of. Stills and runtimes come from TMDb's matching season (Sonarr's list has no
+  artwork), falling back to Plex's own for episodes in the library. Request results
+  show in a toast.
+- **More Like This** (`/api/titles/:type/:id/similar`): up to 12 TMDb recommendations
+  with the home rows' quality bar and status merge, loaded after the page so it never
+  delays it.
 - **Loading:** screens show placeholders in the shape of their content, and images fade
   in when loaded. All motion is off under `prefers-reduced-motion`. Enter opens the title page; Continue Watching
   cards resume directly (their details show the episode's synopsis). Back = Escape,

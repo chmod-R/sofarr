@@ -71,6 +71,9 @@ export interface TitleDetail extends Title {
   trailerYoutubeKey: string | null;
   /** Title logo artwork, shown in place of the plain-text title. */
   logo: string | null;
+  /** Age rating in the configured region, e.g. "PG-13". */
+  certification: string | null;
+  cast: string[];
   seasons?: SeasonInfo[];
   seasonNumbering?: "identity" | "offset" | "sonarr-only" | "tmdb";
 }
@@ -82,6 +85,9 @@ export interface EpisodeInfo {
   title: string;
   airDate: string | null;
   overview: string;
+  still: string | null;
+  /** Minutes. */
+  runtime: number | null;
   status: EpisodeStatus;
   plexKey?: string;
   watched?: boolean;
