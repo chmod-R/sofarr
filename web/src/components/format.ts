@@ -55,7 +55,7 @@ export function statusLabel(t: Pick<Title, "status" | "availableFrom" | "downloa
     case "downloading":
       return t.download ? downloadLabel(t.download) : "Downloading";
     case "requested":
-      return "Requested · searching";
+      return t.availableFrom ? `Requested · coming ${shortDate(t.availableFrom)}` : "Requested · searching";
     case "upcoming":
       return t.availableFrom ? `Coming ${shortDate(t.availableFrom)}` : "Not out yet";
     case "available":

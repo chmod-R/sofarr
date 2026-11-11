@@ -273,6 +273,10 @@ function tmdbRoutes(): Record<string, Handler> {
           : json({ results: [] }),
     [`${TMDB}/movie/101`]: ok(movie(101, "Downloading", "2020-01-01")),
     [`${TMDB}/movie/100`]: ok(movie(100, "Imported", "2020-01-01")),
+    [`${TMDB}/movie/102`]: ok(movie(102, "Requested", "2020-01-01")),
+    [`${TMDB}/movie/102/release_dates`]: ok({
+      results: [{ iso_3166_1: "US", release_dates: [{ type: 4, release_date: "2026-12-01T00:00:00.000Z" }] }],
+    }),
   };
 }
 
@@ -308,6 +312,7 @@ describe("GET /api/home", () => {
     expect(rows.map((r: { id: string }) => r.id)).toEqual([
       "continue",
       "downloading",
+      "coming-soon",
       "because-0",
       "trending-movies",
       "because-1",
@@ -332,6 +337,14 @@ describe("GET /api/home", () => {
       "Other Show": "available",
       "Future Show": "upcoming",
     });
+
+    // Top 10 rows are rankings; the others aren't.
+    expect(rows.filter((r: { ranked?: boolean }) => r.ranked).map((r: { title: string }) => r.title)).toEqual([
+      "Top 10 Movies This Week",
+      "Top 10 Shows This Week",
+    ]);
+    // Coming Soon: requested, nothing downloading yet, with the date it's due.
+    expect(row("coming-soon").items).toMatchObject([{ title: "Requested", status: "requested", availableFrom: "2026-12-01" }]);
 
     const tm = row("trending-movies").items;
     expect(tm[0]).toMatchObject({ plexKey: "10", id: "movie:603", poster: "https://image.tmdb.org/t/p/w342/p603.jpg" });
@@ -362,9 +375,10 @@ describe("GET /api/home", () => {
   it("filters weak recommendations and the seed itself", async () => {
     const { app, cookie } = await homeSetup();
     const { rows } = (await app.inject({ url: "/api/home", headers: { cookie } })).json();
-    expect(rows[2]).toMatchObject({ title: "Because you watched The Matrix" });
-    expect(rows[2].items.map((i: { title: string }) => i.title)).toEqual(["The Matrix Reloaded"]);
-    expect(rows[4]).toMatchObject({ title: "Because you watched Doctor Who" });
+    const because = rows.filter((r: { id: string }) => r.id.startsWith("because-"));
+    expect(because[0]).toMatchObject({ title: "Because you watched The Matrix" });
+    expect(because[0].items.map((i: { title: string }) => i.title)).toEqual(["The Matrix Reloaded"]);
+    expect(because[1]).toMatchObject({ title: "Because you watched Doctor Who" });
   });
 
   it("lists active downloads, including owned shows getting episodes", async () => {

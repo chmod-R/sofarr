@@ -22,6 +22,8 @@ export type RowItem = Title & {
 export interface Row {
   id: string;
   title: string;
+  /** The order is a ranking: cards are numbered 1, 2, 3… */
+  ranked?: boolean;
   items: RowItem[];
 }
 
@@ -43,6 +45,7 @@ const ROW_MAX = 20;
 const MIN_VOTES = 100;
 const MIN_RATING = 6.0;
 const SEED_ROWS = 3;
+const TOP_N = 10;
 
 /** Await an upstream call; on an upstream failure, note it in `warnings` and use the fallback. */
 function softFail(warnings: string[]) {
@@ -124,6 +127,9 @@ export async function buildHome(deps: HomeDeps, serverToken: string): Promise<Ho
   const push = (id: string, title: string, items: RowItem[]) => {
     if (items.length) rows.push({ id, title, items: items.slice(0, ROW_MAX) });
   };
+  const pushTop = (id: string, title: string, items: RowItem[]) => {
+    if (items.length) rows.push({ id, title, ranked: true, items: items.slice(0, TOP_N) });
+  };
 
   // Continue Watching
   push(
@@ -170,20 +176,44 @@ export async function buildHome(deps: HomeDeps, serverToken: string): Promise<Ho
   }
   push("downloading", "Downloading Now", downloading);
 
+  // Coming Soon: asked for, nothing to download yet. Not out yet (with a date when known) first, then still searching.
+  if (deps.tmdb) {
+    const tmdb = deps.tmdb;
+    const waiting = [...arr]
+      .filter(([key, e]) => e.monitored && !e.download && !e.hasFiles && !library.byTmdb.has(key))
+      .slice(0, ROW_MAX)
+      .map(([, e]) => e);
+    const found = await mapLimit(waiting, 8, async (e): Promise<RowItem | undefined> => {
+      const t = await soft("tmdb", tmdb.details(e.mediaType, e.tmdbId), undefined);
+      if (!t) return undefined;
+      const item: RowItem = fromTmdb(t, ctx);
+      // When it's due: a movie's home release, a show's premiere.
+      const due =
+        e.mediaType === "movie"
+          ? (await tmdb.homeRelease(e.tmdbId).catch(() => undefined))?.date ?? (t.date && t.date > today ? t.date : null)
+          : t.date;
+      if (due && due > today) item.availableFrom = due;
+      return item;
+    });
+    const soon = found.filter((i): i is RowItem => Boolean(i));
+    const order = (i: RowItem) => i.availableFrom ?? "9999";
+    push("coming-soon", "Coming Soon", soon.sort((a, b) => order(a).localeCompare(order(b))));
+  }
+
   const [r0, r1, r2] = recs;
   const recRow = (r: (typeof recs)[number] | undefined, n: number) => {
     if (r) push(`because-${n}`, `Because you watched ${r.seed.title}`, r.items.map((i) => fromTmdb(i, ctx)));
   };
 
   recRow(r0, 0);
-  push("trending-movies", "Trending Movies", trendingMovies.map((i) => fromTmdb(i, ctx)));
+  pushTop("trending-movies", "Top 10 Movies This Week", trendingMovies.map((i) => fromTmdb(i, ctx)));
   recRow(r1, 1);
-  push("trending-tv", "Trending TV", trendingTv.map((i) => fromTmdb(i, ctx)));
+  pushTop("trending-tv", "Top 10 Shows This Week", trendingTv.map((i) => fromTmdb(i, ctx)));
   push(
     "recently-added",
     "Recently Added",
     [...library.byTmdb.values()]
-      .sort((a, b) => b.addedAt - a.addedAt)
+      .sort((a, b) => b.latestAt - a.latestAt)
       .slice(0, ROW_MAX)
       .map((i) => fromPlex(i, ctx)),
   );

@@ -74,21 +74,19 @@ export function GridSkeleton({ className, count = 12, heading }: { className: st
 
 export function TitleSkeleton() {
   return (
-    <main className="title-page" aria-busy="true" aria-label="Loading">
-      <div className="title-body" aria-hidden>
-        <div className="skel skel-logo" />
-        <div className="hero-meta">
-          <div className="skel skel-meta" />
-        </div>
-        <div className="title-overview">
-          <SkeletonText lines={4} />
-        </div>
-        <div className="actions">
-          <div className="skel skel-button" />
-          <div className="skel skel-button" />
-        </div>
+    <div className="title-body" aria-hidden>
+      <div className="skel skel-logo" />
+      <div className="hero-meta">
+        <div className="skel skel-meta" />
       </div>
-    </main>
+      <div className="title-overview">
+        <SkeletonText lines={4} />
+      </div>
+      <div className="actions">
+        <div className="skel skel-button" />
+        <div className="skel skel-button" />
+      </div>
+    </div>
   );
 }
 

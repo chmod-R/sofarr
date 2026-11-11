@@ -15,6 +15,7 @@
   --warn: #e7c35a;
   --focus: 0 0 0 0.2rem var(--bg), 0 0 0 0.4rem var(--accent);
   --radius: 0.5rem;
+  --card-radius: 0.28rem; /* artwork gets tighter corners than buttons and panels */
   --gutter: clamp(1rem, 4vw, 4rem);
   --card-w: clamp(11rem, 19vw, 19rem);
   --card-w-lg: calc(var(--card-w) * 1.7);
@@ -608,6 +609,89 @@ p {
 .row-track .card.is-focused {
   transform: scale(1.05);
 }
+/* Top 10: a large outlined numeral tucked behind each card's left edge. */
+.card.is-ranked {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  aspect-ratio: auto;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+}
+.card.is-ranked.is-focused {
+  box-shadow: none;
+}
+.card-rank {
+  margin-right: -0.14em;
+  font-size: calc(var(--card-w) * 0.6);
+  font-weight: 900;
+  line-height: 0.76;
+  letter-spacing: -0.07em;
+  color: var(--bg);
+  -webkit-text-stroke: 0.035em #7a7e8c;
+  user-select: none;
+  transition: -webkit-text-stroke-color 140ms ease;
+}
+.card.is-focused .card-rank {
+  -webkit-text-stroke-color: var(--text);
+}
+.card-art {
+  position: relative;
+  flex: 0 0 var(--card-w);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  background: var(--bg-raised);
+  transition: box-shadow 140ms ease;
+}
+.card.is-ranked.is-focused .card-art {
+  box-shadow: var(--focus), 0 0.8rem 2rem rgba(0, 0, 0, 0.6);
+}
+
+/* Mouse: arrows at a row's edges page it sideways. */
+.row-body {
+  position: relative;
+}
+.row-page {
+  position: absolute;
+  top: 1rem;
+  bottom: 1.1rem;
+  z-index: 3;
+  display: none;
+  place-items: center;
+  width: calc(var(--gutter) - 0.3rem);
+  min-width: 2.2rem;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  font-size: 2.6rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease, font-size 150ms ease;
+}
+.row-page.is-left {
+  left: 0;
+  border-radius: 0 var(--card-radius) var(--card-radius) 0;
+  background: linear-gradient(to right, rgba(14, 15, 19, 0.9), rgba(14, 15, 19, 0.5));
+}
+.row-page.is-right {
+  right: 0;
+  border-radius: var(--card-radius) 0 0 var(--card-radius);
+  background: linear-gradient(to left, rgba(14, 15, 19, 0.9), rgba(14, 15, 19, 0.5));
+}
+@media (hover: hover) and (pointer: fine) {
+  .row-page {
+    display: grid;
+  }
+  .row:hover .row-page {
+    opacity: 1;
+  }
+  .row-page:hover {
+    font-size: 3.4rem;
+  }
+}
 .row-end {
   flex: 0 0 calc(100vw - var(--card-w) - 2 * var(--gutter));
 }
@@ -616,7 +700,7 @@ p {
   position: relative;
   flex: 0 0 var(--card-w);
   aspect-ratio: 16 / 9;
-  border-radius: var(--radius);
+  border-radius: var(--card-radius);
   overflow: hidden;
   background: var(--bg-raised);
   cursor: pointer;
@@ -687,6 +771,21 @@ p {
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
 }
+/* Top-left: new in the library. */
+.ribbon {
+  position: absolute;
+  top: 0.5rem;
+  left: 0;
+  padding: 0.12rem 0.55rem 0.12rem 0.5rem;
+  border-radius: 0 0.25rem 0.25rem 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow: 0 0.15rem 0.5rem rgba(0, 0, 0, 0.5);
+}
 .badge-get {
   background: var(--accent);
   color: var(--accent-ink);
@@ -713,6 +812,30 @@ p {
   height: 100%;
   object-fit: cover;
   object-position: center 20%;
+}
+/* Opening a title from a card: the artwork on screen grows into this backdrop. */
+.title-backdrop.is-preview {
+  view-transition-name: title-art;
+}
+::view-transition-group(title-art) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+}
+::view-transition-old(title-art),
+::view-transition-new(title-art) {
+  height: 100%;
+  object-fit: cover;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
 .title-shade {
   position: fixed;

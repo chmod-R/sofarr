@@ -27,6 +27,8 @@ export interface Title {
   plexKey?: string;
   download?: DownloadInfo;
   availableFrom?: string | null;
+  /** In the library and recent: just added, or a show with new episodes. */
+  fresh?: "new" | "new-episodes";
 }
 
 export interface ResumeInfo {
@@ -44,6 +46,8 @@ export type RowItem = Title & {
 export interface Row {
   id: string;
   title: string;
+  /** The order is a ranking: cards are numbered. */
+  ranked?: boolean;
   items: RowItem[];
 }
 

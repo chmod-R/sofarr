@@ -18,6 +18,8 @@ export interface PlexItem {
   thumb: string | null;
   art: string | null;
   addedAt: number;
+  /** When it, or (for a show) its newest episode, arrived: seconds since the epoch. */
+  latestAt: number;
   lastViewedAt: number | null;
 }
 
@@ -139,6 +141,8 @@ export class PlexServer {
             60_000,
           );
           const mediaType: MediaType = d.type === "movie" ? "movie" : "tv";
+          // A show's own addedAt is when the show first arrived; its newest episodes say more.
+          const newest = mediaType === "tv" ? await this.newestEpisodes(token, d.key) : new Map<string, number>();
           return (body.MediaContainer.Metadata ?? []).flatMap((m): PlexItem[] => {
             const tmdbId = tmdbIdOf(m);
             if (tmdbId === undefined) return []; // e.g. DVR recordings without a match
@@ -155,6 +159,7 @@ export class PlexServer {
                 thumb: m.thumb ?? null,
                 art: m.art ?? null,
                 addedAt: m.addedAt ?? 0,
+                latestAt: Math.max(m.addedAt ?? 0, newest.get(m.ratingKey) ?? 0),
                 lastViewedAt: m.lastViewedAt ?? null,
               },
             ];
@@ -168,6 +173,28 @@ export class PlexServer {
       }
       return lib;
     });
+  }
+
+  /**
+   * Show ratingKey → when its most recently added episode arrived, from the section's
+   * latest episodes. Optional: without it, shows just fall back to their own date.
+   */
+  private async newestEpisodes(token: string, sectionKey: string): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    try {
+      const body = await this.get<Container<"Metadata", RawMeta>>(
+        token,
+        `/library/sections/${sectionKey}/all?type=4&sort=addedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=100`,
+        60_000,
+      );
+      for (const e of body.MediaContainer.Metadata ?? []) {
+        const show = e.grandparentRatingKey;
+        if (show && e.addedAt && e.addedAt > (out.get(show) ?? 0)) out.set(show, e.addedAt);
+      }
+    } catch {
+      /* optional */
+    }
+    return out;
   }
 
   /** Forget cached Plex responses (after playback changed watch state). */

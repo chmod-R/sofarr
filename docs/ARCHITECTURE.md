@@ -89,9 +89,9 @@ Titles are merged across sources by **TMDb id**: Plex items carry TMDb GUIDs
 but not yet scanned by Plex) > `requested` (tracked by *arr, nothing downloading) >
 `upcoming` > `available`. Shows getting new episodes can be `owned` with a `download`.
 
-- **Home rows** (`/api/home`): Continue Watching · Downloading Now · Because you watched
-  … (×3, seeded by the most recently watched titles) · Trending Movies · Trending TV ·
-  Recently Added. Empty rows are dropped. A failed source drops only its rows and adds a
+- **Home rows** (`/api/home`): Continue Watching · Downloading Now · Coming Soon ·
+  Because you watched … (×3, seeded by the most recently watched titles) · Top 10 Movies
+  This Week · Top 10 Shows This Week · Recently Added. Empty rows are dropped. A failed source drops only its rows and adds a
   `warnings` entry, so the screen still renders.
 - **Recommendations** come from TMDb `/recommendations`, filtered to ≥100 votes and
   ≥6.0 rating; unfiltered results are often poor. Still the weakest row: blending seeds,
@@ -110,8 +110,17 @@ but not yet scanned by Plex) > `requested` (tracked by *arr, nothing downloading
 - **Caching** (in memory, with in-flight de-duplication): TMDb 6 h (details and
   release dates 24 h), Plex library 60 s, Continue Watching and *arr 30 s. Plex data is
   dropped when playback pauses or stops, so watch state shows up immediately.
-- **Known gap:** Recently Added sorts shows by when the show was added, not by its
-  newest episode.
+- **Top 10** rows are TMDb's weekly trending list cut to ten and marked `ranked`, which
+  the UI draws as numbered cards.
+- **Coming Soon:** titles Radarr/Sonarr track that have nothing downloaded or
+  downloading yet. Ones that aren't out carry the date they're due (a movie's home
+  release, a show's premiere) and come first, soonest first; the rest are still being
+  searched for.
+- **New in the library.** A show's own `addedAt` is when the show first arrived, so the
+  library also reads each show section's 100 most recently added episodes to learn when
+  each show last got one. Recently Added sorts by that, and library titles carry
+  `fresh` for 14 days: `new` (just added) or `new-episodes`. A show whose newest
+  episode is older than those 100 falls back to its own date.
 - **My Library** (`/api/library`, the header's second tab): the profile's whole Plex
   library as two card grids, TV Shows then Movies, with no limit. The server sends title
   order, like Plex: its sort title when set, else the title without a leading
@@ -225,6 +234,15 @@ it:
   into view. Each row remembers its position. The hero waits for the selection to rest
   (180 ms) before changing, cross-fades artwork only once it has loaded, and prefetches
   the neighbouring cards' artwork. It has nothing to focus.
+- **Cards:** artwork with tighter corners than buttons, a "New" / "New episodes" ribbon
+  from `fresh`, and a corner badge for anything you can't just play (a date when one is
+  known). Top 10 cards have a large outlined numeral beside them. With a mouse, arrows
+  at a row's edges page it sideways; the hero following the pointer is the hover
+  preview.
+- **Opening a title** from a card uses a view transition where the browser has them:
+  the artwork on screen (the hero's on Home, else the card's) grows into the title
+  page's backdrop while the rest cross-fades. The page shows that artwork at once, from
+  what the card already had, with placeholders until the details arrive.
 - **Title logos** replace the plain-text title in the hero and on title pages when TMDb
   has one (`/api/titles/:type/:id/logo` for the hero, looked up per focused title rather
   than for every card on Home; title pages get it with their details). Preference: the

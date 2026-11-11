@@ -26,9 +26,14 @@ export interface Title {
   plexKey?: string;
   /** Queue progress; may accompany `owned` for shows getting new episodes. */
   download?: DownloadInfo;
-  /** For `upcoming`: expected home release date (YYYY-MM-DD) if known. */
+  /** For `upcoming` (and requested titles that aren't out yet): expected release date (YYYY-MM-DD) if known. */
   availableFrom?: string | null;
+  /** In the library and recent: just added, or a show that just got new episodes. */
+  fresh?: "new" | "new-episodes";
 }
+
+/** How long a library title keeps its "New" / "New episodes" ribbon. */
+const FRESH_DAYS = 14;
 
 /** Proxied, resized Plex artwork (the browser never sees a Plex token). */
 export function plexImageUrl(path: string | null, kind: "poster" | "backdrop" | "still"): string | null {
@@ -73,11 +78,11 @@ export function resolveStatus(
   tmdbId: number,
   primaryDate: string | null,
   ctx: StatusContext,
-): Pick<Title, "status" | "plexKey" | "download" | "availableFrom"> {
+): Pick<Title, "status" | "plexKey" | "download" | "availableFrom" | "fresh"> {
   const key = `${mediaType}:${tmdbId}`;
   const plex = ctx.library.byTmdb.get(key);
   const arr = ctx.arr.get(key);
-  const out: Pick<Title, "status" | "plexKey" | "download" | "availableFrom"> = {
+  const out: Pick<Title, "status" | "plexKey" | "download" | "availableFrom" | "fresh"> = {
     status: "available",
   };
   if (arr?.download) out.download = arr.download;
@@ -85,6 +90,9 @@ export function resolveStatus(
   if (plex) {
     out.status = "owned";
     out.plexKey = plex.ratingKey;
+    const cutoff = Date.parse(ctx.today) / 1000 - FRESH_DAYS * 86_400;
+    if (plex.addedAt >= cutoff) out.fresh = "new";
+    else if (plex.latestAt >= cutoff) out.fresh = "new-episodes";
   } else if (arr?.download || arr?.hasFiles) {
     // hasFiles but not in Plex yet = imported, waiting for a Plex library scan.
     out.status = "downloading";

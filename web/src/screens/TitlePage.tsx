@@ -7,6 +7,7 @@ import { FadeImg } from "../components/FadeImg";
 import { downloadLabel, runtime, shortDate, statusLabel } from "../components/format";
 import { EpisodesSkeleton, GridSkeleton, TitleSkeleton } from "../components/Skeleton";
 import { FocusGroup, Focusable, setFocus, useBackKey } from "../nav/focus";
+import { titlePreview } from "../nav/transition";
 import { goBack, navigate } from "../router";
 
 const POLL_MS = 10_000;
@@ -321,6 +322,21 @@ function MoreLikeThis({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId: num
   );
 }
 
+/**
+ * The page's backdrop: the card-sized image first (already in the browser's cache,
+ * and what the card-to-page transition lands on), then the large one over it.
+ */
+function TitleArt({ src }: { src: string | null }) {
+  const large = largeBackdrop(src);
+  return (
+    <>
+      {src && <img className="title-backdrop is-preview" src={src} alt="" />}
+      {large && large !== src && <FadeImg className="title-backdrop" src={large} />}
+      <div className="title-shade" />
+    </>
+  );
+}
+
 export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId: number }) {
   const [detail, setDetail] = useState<TitleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -412,7 +428,14 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
       </main>
     );
   }
-  if (!detail) return <TitleSkeleton />;
+  if (!detail) {
+    return (
+      <main className="title-page" aria-busy="true" aria-label="Loading">
+        <TitleArt src={titlePreview(mediaType, tmdbId)?.backdrop ?? null} />
+        <TitleSkeleton />
+      </main>
+    );
+  }
 
   const isTv = detail.mediaType === "tv";
   const seasonCount = detail.seasons?.length ?? 0;
@@ -449,8 +472,7 @@ export function TitlePage({ mediaType, tmdbId }: { mediaType: MediaType; tmdbId:
 
   return (
     <main className="title-page">
-      {detail.backdrop && <FadeImg className="title-backdrop" src={largeBackdrop(detail.backdrop)!} />}
-      <div className="title-shade" />
+      <TitleArt src={detail.backdrop} />
       <div className="title-body">
         <h1 className="title-name" aria-label={detail.title}>
           {detail.logo && logoFailed !== detail.logo ? (
