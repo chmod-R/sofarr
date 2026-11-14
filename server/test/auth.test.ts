@@ -46,7 +46,7 @@ describe("PIN sign-in", () => {
     });
   });
 
-  it("never returns Plex tokens to the browser", async () => {
+  it("never returns Plex tokens to the client", async () => {
     const { app, plex } = setup();
     const { res, cookie } = await signIn(app, plex);
     const bodies = [res.body];
@@ -66,7 +66,7 @@ describe("PIN sign-in", () => {
     for (const b of bodies) expect(b).not.toMatch(/-token|srv-/);
   });
 
-  it("rejects polling without the browser's pending cookie", async () => {
+  it("rejects polling without the client's pending cookie", async () => {
     const { app } = setup();
     await app.inject({ method: "POST", url: "/api/auth/pin" });
     const res = await app.inject({ url: "/api/auth/pin" });

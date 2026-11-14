@@ -1,11 +1,10 @@
 {
   "name": "sofarr",
   "private": true,
-  "description": "Couch-first, Netflix-style front end for Plex + Sonarr/Radarr",
+  "description": "A Netflix-style Android TV app for Plex + Radarr/Sonarr, with its server",
   "license": "MIT",
   "workspaces": [
-    "server",
-    "web"
+    "server"
   ],
   "engines": {
     "node": ">=24"

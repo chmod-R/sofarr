@@ -72,13 +72,13 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Home: the hero's share of the screen (56vh on the web); the rows get the rest. */
+/** Home: the hero's share of the screen (56% of its height); the rows get the rest. */
 private val HeroHeight = 302.dp
 
 /** From the top of a row to its cards: the title (13 sp) and the track's top padding. */
 private val RowHead = 34.dp
 
-/** Title logos, looked up once per title for the life of the app (the web's useLogo). */
+/** Title logos, looked up once per title for the life of the app. */
 object Logos {
     private val known = mutableStateMapOf<String, String?>()
     private val loading = mutableSetOf<String>()
@@ -108,7 +108,7 @@ fun openItem(context: Context, item: RowItem, launch: (Intent) -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Unit) {
+fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Unit, onSessionLost: () -> Unit) {
     val context = LocalContext.current
     val density = LocalDensity.current
     var rows by remember { mutableStateOf<List<Row>?>(null) }
@@ -129,7 +129,7 @@ fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Uni
 
     LaunchedEffect(Unit) { profile = runCatching { api.session().profile }.getOrNull() }
 
-    // Like the web: refresh every 60 s, every 15 s while something downloads, and when coming back.
+    // Refresh every 60 s, every 15 s while something downloads, and when coming back.
     LaunchedEffect(reload) {
         while (true) {
             try {
@@ -139,6 +139,10 @@ fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Uni
                 warnings = home.warnings
                 error = null
                 if (firstLoad) wantFocus = true
+            } catch (e: ApiException) {
+                // Signed out elsewhere (or the session ran out), or no profile selected: back to sign-in / profiles.
+                if (e.code == 401 || e.error == "no_profile_selected") return@LaunchedEffect onSessionLost()
+                if (rows == null) error = "Couldn't load Home (${e.message})."
             } catch (e: Exception) {
                 if (rows == null) error = "Couldn't load Home (${e.message ?: e.javaClass.simpleName})."
             }
@@ -157,7 +161,7 @@ fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Uni
     val hero = shown?.let { s -> rows?.firstNotNullOfOrNull { r -> r.items.firstOrNull { it.id == s.id } } ?: s }
 
     BackHandler(enabled = menuOpen) { menuOpen = false }
-    // Back from My Library goes to Home (as on the web).
+    // Back from My Library goes to Home.
     BackHandler(enabled = !menuOpen && tab == "library") { tab = "home" }
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
@@ -240,7 +244,7 @@ private fun HomeRow(
     Column(Modifier.padding(bottom = 10.dp)) {
         Text(row.title, color = titleColor, fontSize = 13.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = Tokens.Gutter, bottom = 2.dp))
-        // The selected card stays at the row's left edge, as on the web.
+        // The selected card stays at the row's left edge.
         CompositionLocalProvider(LocalBringIntoViewSpec provides remember(gutterPx) { PinToStart(gutterPx) }) {
             LazyRow(
                 contentPadding = PaddingValues(start = Tokens.Gutter, top = 10.dp, bottom = 11.dp),
@@ -348,7 +352,7 @@ private fun Header(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Sofarr", color = Tokens.Accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.02.em)
-            // .tabs: switching keeps focus on the tab, like the web.
+            // Switching tabs keeps focus on the tab.
             Row(Modifier.padding(start = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TabButton("Home", current = tab == "home", onClick = { onTab("home") })
                 TabButton("My Library", current = tab == "library", onClick = { onTab("library") })

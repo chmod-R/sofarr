@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 
-/** The web's LibrarySort: the server sends title order; the others sort by release date. */
+/** Library sorts: the server sends title order; the others sort by release date. */
 private enum class LibrarySort(val key: String, val label: String) {
     Title("title", "Title"),
     ReleasedAsc("released-asc", "Release Date ↑"),
@@ -49,7 +49,7 @@ private enum class LibrarySort(val key: String, val label: String) {
 
 private const val COLUMNS = 4
 
-/** Remembered on this device, like the web remembers it per browser. */
+/** Remembered on this device. */
 private fun loadSort(context: Context): LibrarySort {
     val v = context.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("librarySort", null)
     return LibrarySort.entries.firstOrNull { it.key == v } ?: LibrarySort.Title
@@ -58,7 +58,7 @@ private fun loadSort(context: Context): LibrarySort {
 private fun saveSort(context: Context, s: LibrarySort) =
     context.getSharedPreferences("ui", Context.MODE_PRIVATE).edit().putString("librarySort", s.key).apply()
 
-/** Sortable date: the full release date, else the year; unknown dates last either way (the web's sortItems). */
+/** Sortable date: the full release date, else the year; unknown dates last either way. */
 private fun sortItems(items: List<RowItem>, sort: LibrarySort): List<RowItem> {
     if (sort == LibrarySort.Title) return items
     val dir = if (sort == LibrarySort.ReleasedAsc) 1 else -1
@@ -75,7 +75,7 @@ private fun sortItems(items: List<RowItem>, sort: LibrarySort): List<RowItem> {
 }
 
 /**
- * My Library (the web's second tab): the profile's whole Plex library as card grids,
+ * My Library (Home's second tab): the profile's whole Plex library as card grids,
  * TV Shows then Movies, with a sort switch above them.
  */
 @OptIn(ExperimentalFoundationApi::class)

@@ -2,7 +2,6 @@
 
 package io.github.chmodr.sofarr
 
-import android.media.MediaCodecInfo.CodecProfileLevel
 import android.media.MediaCodecList
 import android.os.Bundle
 import android.util.Log
@@ -122,7 +121,7 @@ private data class Choice(val subtitle: Boolean, val id: Int, val label: String,
 private data class Skip(val dir: Int, val totalS: Long, val n: Int)
 
 /**
- * Plays one movie or episode, with the web player's controls and keys. Tries the original
+ * Plays one movie or episode, with Sofarr's own controls and keys. Tries the original
  * file first (direct play: no work for the server, and audio / embedded subtitles switch
  * instantly); when this device can't decode it, or the chosen subtitles have to be drawn by
  * Plex, it asks Sofarr for a Plex transcode and carries on from the same point.
@@ -303,7 +302,7 @@ class PlayerActivity : ComponentActivity() {
         lifecycleScope.launch { runCatching { api.progress(s.id, position, state) } }
     }
 
-    // ---- Actions (the web player's) ----
+    // ---- Actions ----
 
     private fun showControls() {
         controls = true
@@ -418,7 +417,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    /** All the remote's keys, like the web player's keydown handler. Back is handled separately. */
+    /** All the remote's keys. Back is handled separately. */
     private fun onKey(code: Int): Boolean {
         val p = panel
         val s = session
@@ -773,7 +772,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    /** A button in the web's style whose focus is managed by the player's own key handling. */
+    /** A button drawn in Sofarr's style whose focus is managed by the player's own key handling. */
     @Composable
     private fun FakeButton(text: String, focused: Boolean, primary: Boolean = false, quiet: Boolean = false, open: Boolean = false) {
         val (bg, fg) = when {
@@ -815,14 +814,8 @@ class PlayerActivity : ComponentActivity() {
     private fun deviceCapabilities(): Capabilities {
         val decoders = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { !it.isEncoder }
         fun has(mime: String) = decoders.any { d -> d.supportedTypes.any { it.equals(mime, ignoreCase = true) } }
-        val hevcMain10 = decoders.any { d ->
-            d.supportedTypes.any { it.equals(MimeTypes.VIDEO_H265, true) } &&
-                d.getCapabilitiesForType(MimeTypes.VIDEO_H265).profileLevels.any { it.profile == CodecProfileLevel.HEVCProfileMain10 }
-        }
         return Capabilities(
-            nativeHls = false, // fMP4 HLS, which ExoPlayer plays
             hevc = has(MimeTypes.VIDEO_H265),
-            hevcMain10 = hevcMain10,
             eac3 = has(MimeTypes.AUDIO_E_AC3),
             ac3 = has(MimeTypes.AUDIO_AC3),
         )
@@ -845,7 +838,7 @@ private fun clock(ms: Long): String {
     return "${if (h > 0) "$h:" else ""}$mm:${"%02d".format(sec)}"
 }
 
-// The web player's icons (24 x 24 SVGs).
+// The player's icons (24 x 24).
 private val PlayIcon = ImageVector.Builder("play", 24.dp, 24.dp, 24f, 24f)
     .addPath(addPathNodes("M7 4.5v15a.8.8 0 0 0 1.2.7l12.5-7.5a.8.8 0 0 0 0-1.4L8.2 3.8A.8.8 0 0 0 7 4.5z"), fill = SolidColor(Color.White))
     .build()

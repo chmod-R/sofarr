@@ -10,7 +10,7 @@ import { type Capabilities, chooseProfile, type PlexItem, type PlexPlayback, typ
 
 /**
  * One playback in progress. The id is an unguessable capability: media requests
- * (from <video> or a native player) may not carry cookies.
+ * from the player carry no cookies.
  * `hls`: Plex's transcoder, proxied. `direct`: the original file, proxied.
  */
 type PlaySession = {
@@ -39,9 +39,7 @@ const playBody = z
     mode: z.enum(["hls", "direct"]).optional(),
     capabilities: z
       .object({
-        nativeHls: z.boolean(),
         hevc: z.boolean(),
-        hevcMain10: z.boolean(),
         eac3: z.boolean(),
         ac3: z.boolean(),
       })
@@ -159,7 +157,7 @@ export function registerPlaybackRoutes(
       s = { ...base, mode: "hls", profile, capabilities: req.capabilities };
       decision = await deps.plex.decision(token, s.ratingKey, s.plexSession, profile, s.offsetSec);
       log.info(
-        { ratingKey: s.ratingKey, profile: profile.profileName ?? profile.platform, video: decision.video, audio: decision.audio },
+        { ratingKey: s.ratingKey, profile: profile.platform, video: decision.video, audio: decision.audio },
         "playback started",
       );
     }

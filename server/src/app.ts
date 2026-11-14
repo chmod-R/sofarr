@@ -19,7 +19,6 @@ import { registerPlaybackRoutes } from "./playback/routes.js";
 import { checkUpstreams } from "./upstreams/checks.js";
 import type { FetchFn } from "./upstreams/http.js";
 import { VERSION } from "./version.js";
-import { DEFAULT_WEB_DIR, registerWeb } from "./web.js";
 
 export interface AppDeps {
   fetch?: FetchFn;
@@ -61,8 +60,8 @@ export function buildApp(config: Config, deps: AppDeps = {}): FastifyInstance {
   app.register(cookie);
 
   /**
-   * CSRF guard for state-changing requests: browsers always send Origin on
-   * cross-site POSTs, so reject any whose origin isn't this host.
+   * CSRF guard for state-changing requests: a request that carries an Origin
+   * (as a web page's would) must come from this host. The app sends none.
    */
   app.addHook("onRequest", async (request, reply) => {
     if (request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS") {
@@ -137,8 +136,6 @@ export function buildApp(config: Config, deps: AppDeps = {}): FastifyInstance {
       }),
     });
   }
-
-  registerWeb(app, config.webDir ?? DEFAULT_WEB_DIR);
 
   // Housekeeping: drop expired sessions / pending sign-ins hourly.
   pruneExpired(db);

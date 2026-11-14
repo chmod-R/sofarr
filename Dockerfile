@@ -1,29 +1,25 @@
 # syntax=docker/dockerfile:1
 
-# ---- build: install all deps, compile the server, bundle the web UI ----
+# ---- build: install all deps, compile the server ----
 # Runs on the build machine's own architecture: the output is plain JavaScript,
-# so multi-arch images don't pay for an emulated TypeScript/Vite build.
+# so multi-arch images don't pay for an emulated TypeScript build.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
-COPY web/package.json web/
 RUN npm ci --workspaces --include-workspace-root
 COPY server/ server/
-COPY web/ web/
-RUN npm run build -w server && npm run build -w web
+RUN npm run build -w server
 
-# ---- runtime: server production deps + compiled server + static web UI ----
+# ---- runtime: server production deps + compiled server ----
 FROM node:24-alpine
 ENV NODE_ENV=production \
     SOFARR_DATA_DIR=/data
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
-COPY web/package.json web/
 RUN npm ci -w server --omit=dev && npm cache clean --force
 COPY --from=build /app/server/dist server/dist
-COPY --from=build /app/web/dist web/dist
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

@@ -41,7 +41,7 @@ const MIGRATIONS: string[] = [
     updated_at    INTEGER NOT NULL
   );
 
-  -- A sign-in in progress: a Plex PIN bound to the browser that requested it.
+  -- A sign-in in progress: a Plex PIN bound to the client that requested it.
   CREATE TABLE pending_logins (
     id          TEXT PRIMARY KEY,             -- sha256 of the pending cookie
     pin_id      INTEGER NOT NULL,

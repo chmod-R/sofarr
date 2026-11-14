@@ -29,8 +29,6 @@ const envSchema = z.object({
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
   SOFARR_DATA_DIR: z.string().default("/data"),
-  /** Built web UI directory (default: <repo>/web/dist). */
-  SOFARR_WEB_DIR: optionalString,
   /** Set when behind a reverse proxy that terminates TLS (affects Secure cookies, client IP). */
   SOFARR_TRUST_PROXY: z
     .enum(["true", "false", "1", "0", ""])
@@ -75,7 +73,6 @@ export interface Config {
   port: number;
   logLevel: z.infer<typeof envSchema>["SOFARR_LOG_LEVEL"];
   dataDir: string;
-  webDir?: string;
   upstreamTimeoutMs: number;
   trustProxy: boolean;
   region: string;
@@ -119,7 +116,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     region: e.SOFARR_REGION,
     language: e.SOFARR_LANGUAGE,
   };
-  if (e.SOFARR_WEB_DIR) config.webDir = e.SOFARR_WEB_DIR;
   if (e.SOFARR_PLEX_URL) config.plex = { url: e.SOFARR_PLEX_URL };
   const radarr = arr("RADARR", e.SOFARR_RADARR_URL, e.SOFARR_RADARR_API_KEY);
   if (radarr) {

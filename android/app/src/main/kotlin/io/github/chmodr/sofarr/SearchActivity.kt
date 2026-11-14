@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 
-/** Search movies and shows (the web's Search): on-screen keyboard on the left, results on the right. */
+/** Search movies and shows: on-screen keyboard on the left, results on the right. */
 class SearchActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,7 +114,7 @@ private fun SearchScreen(api: SofarrApi, onBack: () -> Unit) {
         }
     }
 
-    // Back deletes what's typed first, like Backspace on the web.
+    // Back deletes what's typed first, like Backspace.
     BackHandler(enabled = query.isNotEmpty()) { query = query.dropLast(1) }
 
     Row(Modifier.fillMaxSize().padding(start = Tokens.Gutter, end = Tokens.Gutter, top = 15.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -210,7 +210,7 @@ private fun ResultsGrid(api: SofarrApi, items: List<RowItem>?, onOpen: (RowItem)
     }
 }
 
-/** The header's magnifier (`SearchIcon` on the web). */
+/** The header's magnifier. */
 @Composable
 fun SearchIcon(color: Color, size: Dp = 15.dp) {
     Canvas(Modifier.size(size)) {

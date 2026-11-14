@@ -96,7 +96,7 @@ describe("watch state on title pages", () => {
     const url = "/api/titles/tv/200/seasons/1?numbering=tmdb";
     expect((await app.inject({ url, headers: { cookie } })).json().episodes[1].watched).toBe(false);
 
-    const caps = { nativeHls: true, hevc: true, hevcMain10: true, eac3: true, ac3: true };
+    const caps = { hevc: true, eac3: true, ac3: true };
     const p = (await app.inject({ method: "POST", url: "/api/play", headers: { cookie }, payload: { plexKey: "302", capabilities: caps } })).json();
     await app.inject({ method: "POST", url: `/api/play/${p.id}/progress`, payload: { timeMs: 1_190_000, state: "stopped" } });
 

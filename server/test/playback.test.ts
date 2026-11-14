@@ -2,22 +2,17 @@ import { describe, expect, it } from "vitest";
 import { chooseProfile } from "../src/playback/plexPlayback.js";
 import { FakePlex, fakeFetch, type Handler, header, json, makeApp, PLEX_URL, signIn, signInAdmin } from "./helpers.js";
 
-const SAFARI = { nativeHls: true, hevc: true, hevcMain10: true, eac3: true, ac3: true };
-const CHROME = { nativeHls: false, hevc: false, hevcMain10: false, eac3: false, ac3: false };
+const DEVICE = { hevc: true, eac3: true, ac3: true };
 
 describe("chooseProfile", () => {
-  it("uses Plex's iOS profile for Safari-class browsers (copies 10-bit HEVC + E-AC3)", () => {
-    expect(chooseProfile(SAFARI)).toMatchObject({ platform: "Safari", profileName: "iOS", container: "mp4" });
-    expect(chooseProfile(SAFARI).extra).toContain("videoCodec=h264,hevc&audioCodec=aac,ac3,eac3");
+  it("asks Plex for HLS the app plays, copying what the device decodes", () => {
+    const p = chooseProfile(DEVICE);
+    expect(p).toMatchObject({ platform: "Chrome", container: "mp4" });
+    expect(p.extra).toContain("videoCodec=h264,hevc&audioCodec=aac,ac3,eac3&");
   });
-  it("falls back to fMP4 for hls.js, offering HEVC only when MediaSource can decode it", () => {
-    const c = chooseProfile(CHROME);
-    expect(c).toMatchObject({ platform: "Chrome", container: "mp4" });
-    expect(c.profileName).toBeUndefined();
-    expect(c.extra).toContain("videoCodec=h264&audioCodec=aac&");
-    expect(chooseProfile({ ...CHROME, hevc: true }).extra).toContain("videoCodec=h264,hevc");
-    // Native HLS without Main 10 (e.g. older Mac): Safari profile, not iOS.
-    expect(chooseProfile({ ...SAFARI, hevcMain10: false }).profileName).toBeUndefined();
+  it("converts what the device can't decode", () => {
+    expect(chooseProfile({ hevc: false, eac3: false, ac3: false }).extra).toContain("videoCodec=h264&audioCodec=aac&");
+    expect(chooseProfile({ hevc: false, eac3: false, ac3: true }).extra).toContain("audioCodec=aac,ac3&");
   });
 });
 
@@ -175,12 +170,12 @@ async function setup() {
   const app = makeApp({}, fakeFetch([...stream.routes("srv-owner"), ...plex.routes()]));
   const cookie = await signInAdmin(app, plex);
   const play = (payload: Record<string, unknown>) =>
-    app.inject({ method: "POST", url: "/api/play", headers: { cookie }, payload: { capabilities: SAFARI, ...payload } });
+    app.inject({ method: "POST", url: "/api/play", headers: { cookie }, payload: { capabilities: DEVICE, ...payload } });
   return { app, cookie, stream, play, plex };
 }
 
 describe("POST /api/play", () => {
-  it("starts a movie where Plex says to resume, with the browser-appropriate profile", async () => {
+  it("starts a movie where Plex says to resume, packaged for the device", async () => {
     const { play, stream } = await setup();
     const res = await play({ plexKey: "10" });
     expect(res.statusCode).toBe(200);
@@ -191,7 +186,7 @@ describe("POST /api/play", () => {
     const d = stream.calls.find((c) => c.path.endsWith("/decision"))!;
     expect(d.params.get("offset")).toBe("1200");
     expect(d.params.get("path")).toBe("/library/metadata/10");
-    expect(d.headers.get("x-plex-client-profile-name")).toBe("iOS");
+    expect(d.headers.get("x-plex-platform")).toBe("Chrome");
     expect(d.headers.get("x-plex-product")).toBe("Sofarr");
   });
 
@@ -218,10 +213,10 @@ describe("POST /api/play", () => {
     const { play, app, plex } = await setup();
     expect((await play({ plexKey: "../x" })).statusCode).toBe(400);
     expect((await play({ plexKey: "99" })).statusCode).toBe(404);
-    const bare = await app.inject({ method: "POST", url: "/api/play", payload: { plexKey: "10", capabilities: SAFARI } });
+    const bare = await app.inject({ method: "POST", url: "/api/play", payload: { plexKey: "10", capabilities: DEVICE } });
     expect(bare.statusCode).toBe(401);
     const { cookie } = await signIn(app, plex);
-    const noProfile = await app.inject({ method: "POST", url: "/api/play", headers: { cookie: cookie! }, payload: { plexKey: "10", capabilities: SAFARI } });
+    const noProfile = await app.inject({ method: "POST", url: "/api/play", headers: { cookie: cookie! }, payload: { plexKey: "10", capabilities: DEVICE } });
     expect(noProfile.json()).toEqual({ error: "no_profile_selected" });
   });
 });
@@ -238,7 +233,7 @@ describe("stream proxy", () => {
     const base = p.src.replace("start.m3u8", "");
     const idx = await app.inject({ url: base + variant });
     expect(idx.headers["content-type"]).toBe("application/vnd.apple.mpegurl");
-    // Never forward a compressed Content-Length for a decompressed body (browsers hang waiting).
+    // Never forward a compressed Content-Length for a decompressed body (players hang waiting).
     expect(idx.headers["content-length"]).not.toBe("17");
     expect(idx.body).toContain("#EXT-X-ENDLIST");
     const dir = base + variant.replace("index.m3u8", "");

@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 
-/** Small corner badge: only for titles you can't just play (the web's Badge). */
+/** Small corner badge: only for titles you can't just play. */
 @Composable
 private fun Badge(item: RowItem, modifier: Modifier) {
     val (text, fg, bg) = when (item.status) {
@@ -99,7 +99,7 @@ private fun CardArt(item: RowItem, imageUrl: String?, showYear: Boolean) {
 }
 
 /**
- * A title card, as on the web: 16:9 artwork with the title over it. Top 10 rows put a
+ * A title card: 16:9 artwork with the title over it. Top 10 rows put a
  * large outlined numeral behind the card's left edge.
  */
 @Composable

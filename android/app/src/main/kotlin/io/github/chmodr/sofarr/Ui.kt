@@ -47,9 +47,8 @@ import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 
 /*
- * Sofarr's look, carried over from the web UI (web/src/styles/app.css).
- * The web sizes everything in rem with the root at ~1.05vw: on a 1080p TV, 1 rem is
- * about 10 dp of Android TV's 960 x 540 dp screen. So "1.3rem" there is 13 here.
+ * Sofarr's look: colours and sizes in one place. Android TV lays out on a 960 x 540 dp
+ * screen; text and spacing are sized for reading from the sofa.
  */
 object Tokens {
     val Bg = Color(0xFF0E0F13)
@@ -73,7 +72,7 @@ object Tokens {
     val Radius = 5.dp // 0.5rem
 }
 
-/** Focus ring: a 2 dp gap in the page colour, then 2 dp of accent (the web's `--focus`). */
+/** Focus ring: a 2 dp gap in the page colour, then 2 dp of accent. */
 fun Modifier.focusRing(focused: Boolean, radius: Dp, gap: Color = Tokens.Bg): Modifier = drawWithContent {
     drawContent()
     if (!focused) return@drawWithContent
@@ -91,7 +90,7 @@ fun Modifier.focusRing(focused: Boolean, radius: Dp, gap: Color = Tokens.Bg): Mo
 
 /**
  * Anything you can select with the remote: scales up and gets the focus ring when
- * focused, like the web's `.is-focused`.
+ * focused.
  */
 @Composable
 fun FocusBox(
@@ -252,7 +251,7 @@ fun BoxScope.Toast(message: String?, onDone: () -> Unit) {
 }
 
 /**
- * Remote navigation like the web's rows: whatever gets focus is scrolled to `leading`
+ * Remote navigation for rows: whatever gets focus is scrolled to `leading`
  * from the start of its list, so the selection stays in one place and the content moves.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -261,7 +260,7 @@ class PinToStart(private val leadingPx: Float) : BringIntoViewSpec {
 }
 
 /**
- * Like a web page: scroll only as far as needed to show what got focus (with a margin).
+ * Scroll only as far as needed to show what got focus (with a margin).
  * Compose's default on TV moves the focused item to about a third of the way down.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -277,7 +276,7 @@ class KeepVisible(private val marginPx: Float, private val topInsetPx: Float = 0
     }
 }
 
-/** "2026-11-17" -> "Nov 17" (adds the year when it isn't this year), as the web's shortDate. */
+/** "2026-11-17" -> "Nov 17" (adds the year when it isn't this year). */
 fun shortDate(iso: String): String {
     val parts = iso.take(10).split("-").mapNotNull { it.toIntOrNull() }
     if (parts.size != 3) return iso
@@ -322,7 +321,7 @@ fun downloadLabel(d: Download): String {
     }
 }
 
-/** The web's statusLabel. */
+/** What a title's status pill says. */
 fun statusLabel(status: String, availableFrom: String?, download: Download?): String = when (status) {
     "owned" -> "Ready to watch"
     "downloading" -> download?.let(::downloadLabel) ?: "Downloading"

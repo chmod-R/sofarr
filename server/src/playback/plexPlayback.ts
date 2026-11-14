@@ -1,15 +1,11 @@
 import { type FetchFn, requestJson, send, UpstreamError } from "../upstreams/http.js";
 
 /**
- * What the browser says it can decode. Sent by the player; used only to pick
- * how Plex should package the stream.
+ * What the app's decoders handle, for streams Plex has to convert (HLS).
+ * Used only to pick how Plex packages the stream.
  */
 export interface Capabilities {
-  /** Plays HLS natively (Safari, iOS) rather than through MediaSource (hls.js). */
-  nativeHls: boolean;
   hevc: boolean;
-  /** 10-bit HEVC (Main 10). */
-  hevcMain10: boolean;
   eac3: boolean;
   ac3: boolean;
 }
@@ -17,8 +13,6 @@ export interface Capabilities {
 export interface StreamProfile {
   /** Plex X-Plex-Platform. */
   platform: string;
-  /** Plex built-in profile to use (X-Plex-Client-Profile-Name), if not the platform's default. */
-  profileName?: string;
   /** X-Plex-Client-Profile-Extra. */
   extra: string;
   /** Segment container Plex will produce. */
@@ -26,22 +20,16 @@ export interface StreamProfile {
 }
 
 /**
- * Pick how Plex should stream to this browser. Measured on the reference
- * server (2026-11-08): Plex's "Safari" profile transcodes 10-bit HEVC and
- * E-AC3, but its "iOS" profile copies both into fMP4 HLS, which Safari on a
- * Mac plays natively. So a browser that natively plays HLS + Main 10 + E-AC3
- * gets the iOS profile, and nearly the whole library streams without
- * re-encoding. Everything else gets fMP4 HLS for hls.js, with HEVC only if
- * MediaSource says it can decode it.
+ * How Plex should package a converted stream for the app: Plex's generic
+ * "Chrome" client profile (HLS that Media3/ExoPlayer plays), with a transcode
+ * target that lets Plex copy HEVC, AC3 and E-AC3 when the device decodes them
+ * instead of converting them.
  */
 export function chooseProfile(c: Capabilities): StreamProfile {
   const video = c.hevc ? "h264,hevc" : "h264";
   const audio = ["aac", c.ac3 && "ac3", c.eac3 && "eac3"].filter(Boolean).join(",");
   const extra = `add-transcode-target(type=videoProfile&context=streaming&protocol=hls&container=mp4&videoCodec=${video}&audioCodec=${audio}&replace=true)`;
-  if (c.nativeHls && c.hevcMain10 && c.eac3) {
-    return { platform: "Safari", profileName: "iOS", extra, container: "mp4" };
-  }
-  return { platform: c.nativeHls ? "Safari" : "Chrome", extra, container: "mp4" };
+  return { platform: "Chrome", extra, container: "mp4" };
 }
 
 export interface PlexItem {
@@ -285,7 +273,6 @@ export class PlexPlayback {
       "X-Plex-Session-Identifier": sessionId,
       "X-Plex-Platform": profile.platform,
       "X-Plex-Client-Profile-Extra": profile.extra,
-      ...(profile.profileName && { "X-Plex-Client-Profile-Name": profile.profileName }),
     });
   }
 

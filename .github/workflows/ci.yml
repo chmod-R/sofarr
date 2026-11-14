@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build -w web
+      - run: npm run build -w server
 
       - name: Release tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')

@@ -91,12 +91,12 @@ fun SofarrTheme(content: @Composable () -> Unit) {
     setSingletonImageLoaderFactory { ctx ->
         ImageLoader.Builder(ctx)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { Sofarr.client(ctx) })) }
-            .crossfade(300) // images fade in when loaded, as on the web
+            .crossfade(300) // images fade in when loaded
             .build()
     }
     MaterialTheme(colorScheme = darkColorScheme(primary = Tokens.Accent, background = Tokens.Bg)) {
         // Text outside a tv-material Surface takes LocalContentColor, which defaults to black.
-        // Line height relative to the text (the web's 1.4), not the TV toolkit's fixed one for large type.
+        // Line height relative to the text (1.4), not the TV toolkit's fixed one for large type.
         CompositionLocalProvider(
             LocalContentColor provides Tokens.Text,
             LocalTextStyle provides LocalTextStyle.current.merge(TextStyle(lineHeight = 1.4.em)),
@@ -157,6 +157,7 @@ private fun App() {
                     screen = Screen.SignIn
                 }
             },
+            onSessionLost = { route() },
         )
         is Screen.Problem -> Centered {
             val focus = remember { FocusRequester() }
@@ -268,7 +269,7 @@ fun TvTextField(
     )
 }
 
-/** Plex sign-in (the web's SignIn): a code for plex.tv/link, and wait until it's linked. */
+/** Plex sign-in: a code (and QR code) for plex.tv/link, and wait until it's linked. */
 @Composable
 private fun SignIn(api: SofarrApi, onSignedIn: () -> Unit) {
     var pin by remember { mutableStateOf<Pin?>(null) }
@@ -342,7 +343,7 @@ private fun SignIn(api: SofarrApi, onSignedIn: () -> Unit) {
     }
 }
 
-/** Plex Home users (the web's ProfilePicker); protected ones ask for their PIN on a pad. */
+/** Plex Home users; protected ones ask for their PIN on a pad. */
 @Composable
 private fun ProfilePicker(api: SofarrApi, onSelected: () -> Unit) {
     var profiles by remember { mutableStateOf<List<Profile>?>(null) }
@@ -410,7 +411,7 @@ private fun ProfilePicker(api: SofarrApi, onSelected: () -> Unit) {
 
 private val PIN_KEYS = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK")
 
-/** The web's PinPad: four dots and a keypad, plus the remote's number keys. */
+/** PIN pad: four dots and a keypad, plus the remote's number keys. */
 @Composable
 private fun PinPad(api: SofarrApi, profile: Profile, onDone: suspend (String) -> String?, onCancel: () -> Unit) {
     var pin by remember { mutableStateOf("") }

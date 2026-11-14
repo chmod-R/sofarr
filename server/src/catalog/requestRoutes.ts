@@ -103,7 +103,7 @@ export function registerRequestRoutes(app: FastifyInstance, deps: RequestDeps): 
     if (!deps.tmdb) return reply.code(503).send({ error: "tmdb_not_configured" });
     try {
       const logo = await deps.tmdb.logo(p.data.mediaType, p.data.tmdbId);
-      // Logos rarely change; let the browser keep the answer too.
+      // Logos rarely change; let the client keep the answer too.
       return reply.header("cache-control", "private, max-age=86400").send({ logo });
     } catch (err) {
       if (err instanceof UpstreamError && err.status === 404) {

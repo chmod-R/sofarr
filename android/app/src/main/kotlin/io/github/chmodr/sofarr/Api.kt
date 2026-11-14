@@ -228,9 +228,9 @@ data class PlayTrack(
 
 @Serializable data class PlayMedia(val container: String? = null, val videoCodec: String? = null, val audioCodec: String? = null)
 
-/** What this device decodes, for when Plex has to convert (same shape the web player sends). */
+/** What this device decodes, for when Plex has to convert (HLS). */
 @Serializable
-data class Capabilities(val nativeHls: Boolean, val hevc: Boolean, val hevcMain10: Boolean, val eac3: Boolean, val ac3: Boolean)
+data class Capabilities(val hevc: Boolean, val eac3: Boolean, val ac3: Boolean)
 
 /** Sofarr's JSON API. One shared HTTP client, so the session cookie goes everywhere (artwork too). */
 class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {

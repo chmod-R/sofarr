@@ -247,7 +247,7 @@ private fun TitleBody(
             Text(d?.title ?: name, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 1.05.em, color = Tokens.Text)
         }
         if (d == null) {
-            // Placeholders in the shape of what's coming (the web's skeleton).
+            // Placeholders in the shape of what's coming.
             Spacer(Modifier.height(12.dp))
             Box(Modifier.width(160.dp).height(13.dp).clip(RoundedCornerShape(Tokens.Radius)).background(Tokens.BgHover))
             Spacer(Modifier.height(12.dp))
@@ -290,7 +290,7 @@ private fun TitleBody(
             )
         }
         Spacer(Modifier.height(15.dp))
-        // The main action, by status (the web's `primary`).
+        // The main action, by status.
         val primary: Pair<String, () -> Unit>? = when (d.status) {
             "owned" -> d.plexKey?.let { key -> "▶ Play" to { onPlay(key) } }
             "available" -> if (isTv) null else (if (busy) "Requesting…" else "Get it") to onRequest
@@ -466,7 +466,7 @@ private fun EpisodeRow(api: SofarrApi, e: EpisodeInfo, busy: Boolean, requesting
         ) {
             Box(Modifier.width(130.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(3.5.dp)).background(Tokens.BgRaised)) {
                 // Episodes you don't have yet are dimmed until they're playable.
-                // (grayscale 0.6, brightness 0.6 on the web)
+                // (40% saturation, 60% brightness)
                 val dim = if (kind != "play") {
                     ColorFilter.colorMatrix(ColorMatrix().apply {
                         setToSaturation(0.4f)
@@ -537,7 +537,7 @@ private fun MoreLikeThis(
     if (list != null && list.isEmpty()) return
     Column(Modifier.background(Tokens.Bg).padding(horizontal = Tokens.Gutter).padding(top = 10.dp)) {
         SectionTitle("More Like This")
-        // A grid, four across (auto-fill of card-width columns on the web).
+        // A grid, four across.
         val columns = 4
         val chunks = list?.chunked(columns) ?: List(2) { emptyList() }
         Column {

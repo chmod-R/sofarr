@@ -35,7 +35,7 @@ export interface Title {
 /** How long a library title keeps its "New" / "New episodes" ribbon. */
 const FRESH_DAYS = 14;
 
-/** Proxied, resized Plex artwork (the browser never sees a Plex token). */
+/** Proxied, resized Plex artwork (the app never sees a Plex token). */
 export function plexImageUrl(path: string | null, kind: "poster" | "backdrop" | "still"): string | null {
   if (!path) return null;
   const [w, h] = kind === "poster" ? [342, 513] : kind === "still" ? [300, 169] : [780, 439];

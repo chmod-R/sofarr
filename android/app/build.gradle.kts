@@ -22,10 +22,27 @@ android {
         versionName = sofarrVersion
     }
 
+    // Release key: passed in by run.sh (it lives in the build cache volume, never in the repo).
+    val keystore = providers.gradleProperty("sofarr.keystore").orNull
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                val password = providers.gradleProperty("sofarr.keystorePassword").get()
+                storeFile = file(keystore)
+                storePassword = password
+                keyAlias = "sofarr"
+                keyPassword = password
+            }
+        }
+    }
+
     buildTypes {
         // Debug builds let adb open the player on any title: am start -n <app>/.PlayerActivity --es plexKey <key>
         getByName("debug") { manifestPlaceholders["playerExported"] = "true" }
-        getByName("release") { manifestPlaceholders["playerExported"] = "false" }
+        getByName("release") {
+            manifestPlaceholders["playerExported"] = "false"
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures {

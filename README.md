@@ -1,47 +1,43 @@
 # Sofarr
 
-A sofa-friendly, Netflix-like front end for a self-hosted
-**Plex + Radarr + Sonarr** setup. Browse what to watch, get anything you don't have
-yet, and play it, all in one app you can drive with a TV remote.
+A sofa-friendly, Netflix-like Android TV app for a self-hosted **Plex + Radarr + Sonarr**
+setup. Browse what to watch, get anything you don't have yet, and play it, all with the
+TV remote. Built for and tested on the Google TV Streamer.
 
-> **Direction:** Sofarr is becoming a native app for the **Google TV Streamer**
-> (`android/`, early days), backed by the Sofarr server below. The web UI described here
-> is being replaced and gets no new work.
+Sofarr has two parts: the **app** on your TV, and a small **server** that runs next to
+your Plex and *arr apps (one Docker container). The app talks only to the server.
 
 ## What it does
 
-- **Browse.** Rows like Continue Watching, Because you watched…, Trending Movies and
-  Trending TV, Downloading Now and Recently Added. Every title shows whether it's in
-  your library, downloading, requested, coming soon (with its digital release date),
-  or available to get.
-- **Search** any movie or show: an on-screen keyboard for remotes, or type.
+- **Browse.** Rows like Continue Watching, Because you watched…, Top 10 Movies and Shows,
+  Coming Soon, Downloading Now and Recently Added, under a header that shows the selected
+  title. Every title shows whether it's in your library, downloading, requested, coming
+  soon (with its digital release date), or available to get. **My Library** lists
+  everything you have, by title or release date.
+- **Search** any movie or show with an on-screen keyboard.
 - **Get it.** One button adds a movie to Radarr, or chosen seasons (or single episodes)
   to Sonarr, and starts the search. Unreleased movies download when they come out.
   Download progress shows live.
 - **Watch** in Sofarr's own player, streamed from your Plex server:
+  - plays most files as they are (direct play: HEVC, Dolby Digital and more, with no
+    work for the server); Plex converts only what the TV can't decode
+  - audio and subtitle tracks in the file switch instantly
   - resumes where you left off; watched status syncs back to Plex
   - up-next countdown for episodes
-  - audio and subtitle selection
-  - in Safari, most files play without re-encoding, including 10-bit HEVC and
-    Dolby Digital Plus
 - **Plex sign-in and profiles.** Sign in with a code at plex.tv/link (or a QR code).
   Profiles are your Plex Home users, with their own history and PINs.
-- **Built for TVs:** arrow keys/D-pad and Back everywhere; also works with a mouse, and on
-  phones.
 
 ## Requirements
 
+- An **Android TV** device with Android 14 or later (Google TV Streamer, or similar).
 - **Plex Media Server.** Sign-in is limited to the server's owner for now.
 - **Radarr** and/or **Sonarr** (v3 API; Sonarr v4 recommended).
 - A free **TMDb API key** ([themoviedb.org → Settings → API](https://www.themoviedb.org/settings/api))
   for trending, recommendations, search and details.
 - *Optional:* **qBittorrent** Web UI access, for live download progress.
-- Docker.
+- Docker, for the server (and for building the app).
 
-Browsers: Safari (macOS/iOS) is the best-tested. Chrome and other Chromium-based browsers
-work; Plex converts video they can't decode (such as HEVC), so expect more server load.
-
-## Quick start (Docker Compose)
+## Server: quick start (Docker Compose)
 
 ```yaml
 services:
@@ -56,8 +52,8 @@ services:
     env_file: .env                # see below
 ```
 
-Copy [`.env.example`](.env.example) to `.env`, fill in your URLs and keys, run
-`docker compose up -d`, and open `http://<your-server>:5656`.
+Copy [`.env.example`](.env.example) to `.env`, fill in your URLs and keys, and run
+`docker compose up -d`. `http://<your-server>:5656/api/health` answers when it's up.
 
 **Networking.** Sofarr has to reach each service's URL from inside its container:
 
@@ -94,48 +90,63 @@ missing just turns off the features that need it.
 "Most-used" means: if unset, Sofarr uses the quality profile and root folder that most
 of your existing Radarr/Sonarr library already uses.
 
+## The app: build and install
+
+The app isn't in the Play Store; you build it and install it over the network. Nothing
+but Docker is needed: `android/run.sh` runs the Android toolchain in a container.
+
+1. **Build:** `android/run.sh image` (once), then `android/run.sh release`. The release
+   signing key is made on first use and kept in a Docker volume.
+2. **On the TV:** Settings → System → About → click *Android TV OS build* 7 times to
+   enable Developer options; then Developer options → **Wireless debugging** on.
+3. **Pair once:** Wireless debugging → *Pair device with pairing code*, then
+   `android/run.sh pair HOST:PORT CODE` with what the TV shows.
+4. **Install:** `SOFARR_TV=HOST:PORT android/run.sh install release`, with the *IP address
+   & Port* from the Wireless debugging screen (the port changes when it's turned off and on).
+
+Sofarr then appears in the TV's apps.
+
 ## Using it
 
-1. **Sign in:** open Sofarr, then enter the code at [plex.tv/link](https://plex.tv/link)
-   or scan the QR code. Plex will list "Sofarr" under your authorized devices.
-2. **Pick a profile** (your Plex Home users; PIN-protected ones ask for the PIN).
-3. **Browse, search, Get it, watch.** In the player: Enter = play/pause, ←/→ = 10 s,
-   ↓ = audio & subtitles, Back = exit.
+1. **Server:** on first launch, enter your server's address (for example
+   `192.168.1.10:5656`).
+2. **Sign in:** enter the code shown at [plex.tv/link](https://plex.tv/link), or scan the
+   QR code. Plex will list "Sofarr" under your authorized devices.
+3. **Pick a profile** (your Plex Home users; PIN-protected ones ask for the PIN).
+4. **Browse, search, Get it, watch.** In the player: Enter = play/pause, ←/→ = 10 s,
+   ↓ = more (Start over, Next episode, Audio & Subtitles), Back = exit.
 
 ## Security notes
 
 - Sofarr stores Plex tokens in its database. Protect the data volume like you would
   Plex's own config.
-- It's designed for your home network. Don't expose it to the internet directly. Put
-  it behind a VPN (e.g. Tailscale) or a reverse proxy with authentication.
-- Plex tokens and *arr keys never reach the browser: artwork and video are proxied
-  through Sofarr.
+- It's designed for your home network, and the app talks to it over plain HTTP. Don't
+  expose it to the internet directly; use a VPN (e.g. Tailscale) for access from outside.
+- Plex tokens and *arr keys never reach the app: artwork and video are proxied through
+  the server.
 
 ## Known limitations
 
-- Subtitles are burned into the picture by Plex, so turning them on makes Plex convert
-  the video.
-- Restarting Sofarr ends streams that are playing (press Play again to resume).
+- Subtitles that aren't in the file (sidecar files), or that the TV can't draw, are
+  burned into the picture by Plex, which converts the video.
+- Restarting the server ends streams that are playing (press Play again to resume).
 - Only the Plex server owner can sign in (friends with shared access: planned).
 
 More, and what's planned: [GitHub Issues](https://github.com/chmod-R/sofarr/issues).
 
 ## Development
 
-No Node.js needed on the host: `scripts/npm` runs npm inside a throwaway
-`node:24-alpine` container.
+No Node.js or Android tooling needed on the host: `scripts/npm` runs npm inside a
+throwaway `node:24-alpine` container, and `android/run.sh` builds the app in Docker.
 
 ```sh
-scripts/npm install                # install dependencies
-scripts/npm test                   # backend tests (fake Plex/*arr/TMDb)
+scripts/npm install                # install server dependencies
+scripts/npm test                   # server tests (fake Plex/*arr/TMDb)
 scripts/npm run typecheck
-scripts/npm run build -w web       # web UI → web/dist (served by the backend)
 docker build -t sofarr:dev .
 docker run --rm -p 5656:5656 --env-file .env -v ./data:/data sofarr:dev
+android/run.sh build               # debug APK; `install` without `release` installs it
 ```
-
-The Android TV app builds in Docker too: see `android/run.sh` and
-[Android TV app](docs/ARCHITECTURE.md#android-tv-app).
 
 How it works and why: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -149,11 +160,12 @@ How it works and why: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | `GET /api/auth/session`, `POST /api/auth/logout` | Current session / sign out |
 | `GET /api/profiles`, `POST /api/profiles/:uuid/select` | Plex Home profiles |
 | `GET /api/home` | Home-screen rows with status |
+| `GET /api/library` | The profile's library: TV Shows and Movies |
 | `GET /api/search?q=` | Movies and shows matching a query, with status |
 | `GET /api/titles/:mediaType/:tmdbId` | Title page: details, trailer, status, seasons |
 | `GET /api/titles/tv/:tmdbId/seasons/:n` | One season's episodes with status and watch state |
 | `POST /api/requests`, `GET /api/requests` | "Get it", and request history |
-| `POST /api/play` | Start playback; returns an HLS URL (or, with `mode: "direct"`, the original file's URL) and audio/subtitle tracks |
+| `POST /api/play` | Start playback: the original file (`mode: "direct"`) or an HLS stream, with audio/subtitle tracks |
 | `POST /api/play/:id/tracks` | Switch audio/subtitles |
 | `POST /api/play/:id/progress` | Report position/state to Plex |
 | `GET /api/plex/image` | Resized Plex artwork |
@@ -161,8 +173,8 @@ How it works and why: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Not affiliated
 
 Sofarr is an independent project. It isn't affiliated with or endorsed by Plex, TMDb,
-the Radarr/Sonarr projects, or any streaming service. This product uses the TMDb API
-but is not endorsed or certified by TMDb.
+Google, the Radarr/Sonarr projects, or any streaming service. This product uses the
+TMDb API but is not endorsed or certified by TMDb.
 
 ## License
 
