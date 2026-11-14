@@ -259,7 +259,8 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
                 put("seasonNumbering", detail.numbering)
             }
         }
-        return post("/api/requests", body, RequestResult.serializer())
+        // Radarr/Sonarr fetch metadata online before answering: give it as long as the server does.
+        return post("/api/requests", body, RequestResult.serializer(), slowClient)
     }
 
     /** Poll the sign-in code. Plex's answer is in the body whatever the status code. */
@@ -317,17 +318,20 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
     private suspend fun <T> get(path: String, serializer: KSerializer<T>): T =
         call(Request.Builder().url(base.resolve(path)!!).build(), serializer)
 
-    private suspend fun <T> post(path: String, body: JsonObject?, serializer: KSerializer<T>): T {
+    private suspend fun <T> post(path: String, body: JsonObject?, serializer: KSerializer<T>, via: OkHttpClient = client): T {
         val text = body?.toString() ?: "{}"
         val request = Request.Builder()
             .url(base.resolve(path)!!)
             .post(text.toRequestBody("application/json".toMediaType()))
             .build()
-        return call(request, serializer)
+        return call(request, serializer, via)
     }
 
-    private suspend fun <T> call(request: Request, serializer: KSerializer<T>): T = withContext(Dispatchers.IO) {
-        client.newCall(request).execute().use { response ->
+    /** For requests to Radarr/Sonarr, which can take a minute or more on a slow VPN. */
+    private val slowClient by lazy { client.newBuilder().readTimeout(150, TimeUnit.SECONDS).build() }
+
+    private suspend fun <T> call(request: Request, serializer: KSerializer<T>, via: OkHttpClient = client): T = withContext(Dispatchers.IO) {
+        via.newCall(request).execute().use { response ->
             val text = response.body.string()
             if (!response.isSuccessful) {
                 val err = runCatching { json.decodeFromString(ErrorBody.serializer(), text) }.getOrNull()

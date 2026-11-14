@@ -85,6 +85,9 @@ export interface SonarrSeries {
 }
 
 export const LOOKUP_TIMEOUT_MS = 30_000;
+/** After an add times out: how long to keep checking whether *arr added it anyway. */
+export const ADD_SETTLE_MS = 30_000;
+const ADD_POLL_MS = 2_000;
 
 const mostCommon = <T>(xs: T[]): T | undefined => {
   const counts = new Map<T, number>();
@@ -120,6 +123,26 @@ export class ArrClient {
     return this.cache.get(`arrlookup:${this.cfg.url}${path}`, 24 * 60 * 60_000, () =>
       this.call<T>("GET", path, undefined, LOOKUP_TIMEOUT_MS),
     );
+  }
+
+  /**
+   * Add a movie or series. *arr fetches its metadata online (often via a VPN) before
+   * answering, so this gets the lookup timeout. If even that runs out, *arr usually
+   * still finishes the add: look for the new item a little longer before giving up,
+   * rather than report a failure for something that worked.
+   */
+  async add<T>(path: string, body: unknown, find: () => Promise<T | undefined>): Promise<T> {
+    try {
+      return await this.call<T>("POST", path, body, LOOKUP_TIMEOUT_MS);
+    } catch (err) {
+      if (!(err instanceof UpstreamError) || err.status !== undefined || !err.message.startsWith("timed out")) throw err;
+      for (let waited = 0; waited < ADD_SETTLE_MS; waited += ADD_POLL_MS) {
+        await new Promise((r) => setTimeout(r, ADD_POLL_MS));
+        const found = await find().catch(() => undefined);
+        if (found) return found;
+      }
+      throw err;
+    }
   }
 
   /** Cached 10 min: profile list, root folders, and existing items to learn defaults from. */
@@ -201,7 +224,7 @@ export class RadarrWriter {
     const found = await this.client.lookup<RadarrMovie>(`/api/v3/movie/lookup/tmdb?tmdbId=${tmdbId}`);
     if (!found?.tmdbId) throw new UpstreamError("Radarr couldn't find that movie");
     const d = await this.defaults();
-    const added = await this.client.call<RadarrMovie>("POST", "/api/v3/movie", {
+    const added = await this.client.add<RadarrMovie>("/api/v3/movie", {
       title: found.title,
       tmdbId: found.tmdbId,
       year: found.year,
@@ -212,7 +235,7 @@ export class RadarrWriter {
       minimumAvailability: d.minimumAvailability,
       monitored: true,
       addOptions: { monitor: "movieOnly", searchForMovie: true },
-    });
+    }, async () => (await this.client.call<RadarrMovie[]>("GET", `/api/v3/movie?tmdbId=${tmdbId}`))[0]);
     return { result: "added", arrId: added.id! };
   }
 }
@@ -308,7 +331,7 @@ export class SonarrWriter {
         throw new UpstreamError(`Sonarr doesn't know season ${season}`);
       }
       const d = await this.defaults();
-      series = await this.client.call<SonarrSeries>("POST", "/api/v3/series", {
+      series = await this.client.add<SonarrSeries>("/api/v3/series", {
         title: found.title,
         tvdbId: found.tvdbId,
         ...(found.tmdbId && { tmdbId: found.tmdbId }),
@@ -323,7 +346,7 @@ export class SonarrWriter {
         monitorNewItems: "none",
         seasons: found.seasons.map((s) => ({ seasonNumber: s.seasonNumber, monitored: false })),
         addOptions: { monitor: "none", searchForMissingEpisodes: false, searchForCutoffUnmetEpisodes: false },
-      });
+      }, async () => (await this.client.call<SonarrSeries[]>("GET", `/api/v3/series?tvdbId=${found.tvdbId}`))[0]);
       result = "added";
     }
     const seriesId = series.id!;
@@ -403,7 +426,7 @@ export class SonarrWriter {
 
     const latest = Math.max(0, ...found.seasons.map((s) => s.seasonNumber));
     const d = await this.defaults();
-    const added = await this.client.call<SonarrSeries>("POST", "/api/v3/series", {
+    const added = await this.client.add<SonarrSeries>("/api/v3/series", {
       title: found.title,
       tvdbId: found.tvdbId,
       ...(found.tmdbId && { tmdbId: found.tmdbId }),
@@ -418,7 +441,7 @@ export class SonarrWriter {
       monitorNewItems: wanted.has(latest) ? "all" : "none",
       seasons: found.seasons.map((s) => ({ seasonNumber: s.seasonNumber, monitored: wanted.has(s.seasonNumber) })),
       addOptions: { ignoreEpisodesWithFiles: true, searchForMissingEpisodes: true },
-    });
+    }, async () => (await this.client.call<SonarrSeries[]>("GET", `/api/v3/series?tvdbId=${found.tvdbId}`))[0]);
     return { result: "added", arrId: added.id!, seasons: [...wanted].sort((a, b) => a - b) };
   }
 }

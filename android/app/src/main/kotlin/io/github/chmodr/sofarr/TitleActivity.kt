@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
@@ -105,6 +108,11 @@ private fun TitleScreen(api: SofarrApi, mediaType: String, tmdbId: Int, preview:
     val scope = rememberCoroutineScope()
     val actions = remember { FocusRequester() }
     val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { reload++ }
+    // Down from the last thing above More Like This goes to its first card, not whichever card
+    // happens to be nearest (the episode rows are full width, so that was the third one).
+    val similarFirst = remember { FocusRequester() }
+    var similarReady by remember { mutableStateOf(false) }
+    val downToSimilar = Modifier.focusProperties { if (similarReady) down = similarFirst }
 
     suspend fun load() {
         try {
@@ -191,23 +199,20 @@ private fun TitleScreen(api: SofarrApi, mediaType: String, tmdbId: Int, preview:
             // Unlike Home, the page only scrolls as far as it must to show what's focused.
             val margin = with(LocalDensity.current) { 40.dp.toPx() }
             CompositionLocalProvider(LocalBringIntoViewSpec provides remember(margin) { KeepVisible(margin) }) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 50.dp)) {
-                    item(key = "body") {
-                        TitleBody(api, d, name, busy, actions, onPlay = ::play, onRequest = { request() }, onTrailer = { key ->
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key")))
-                            }.onFailure { message = "No app here can play the trailer." }
-                        }, onBack = onBack)
-                    }
+                // A plain scrolling page (not lazy): everything stays built, so focus can move to any
+                // part of it, e.g. Down from the last episode straight to More Like This.
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 50.dp)) {
+                    TitleBody(api, d, name, busy, actions, downToSimilar, onPlay = ::play, onRequest = { request() }, onTrailer = { key ->
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key")))
+                        }.onFailure { message = "No app here can play the trailer." }
+                    }, onBack = onBack)
                     if (d != null && d.mediaType == "tv" && !d.seasons.isNullOrEmpty()) {
-                        item(key = "seasons") {
-                            Seasons(api, d, busy, reload, onRequest = { s, e -> request(s, e) }, onPlay = ::play)
-                        }
+                        Seasons(api, d, busy, reload, downToSimilar, onRequest = { s, e -> request(s, e) }, onPlay = ::play)
                     }
                     if (d != null) {
-                        item(key = "similar") {
-                            MoreLikeThis(api, d.mediaType, d.tmdbId, onOpen = { openItem(context, it, open::launch) })
-                        }
+                        MoreLikeThis(api, d.mediaType, d.tmdbId, similarFirst, onReady = { similarReady = it },
+                            onOpen = { openItem(context, it, open::launch) })
                     }
                 }
             }
@@ -223,6 +228,7 @@ private fun TitleBody(
     name: String,
     busy: Boolean,
     actions: FocusRequester,
+    downToSimilar: Modifier,
     onPlay: (String) -> Unit,
     onRequest: () -> Unit,
     onTrailer: (String) -> Unit,
@@ -289,9 +295,11 @@ private fun TitleBody(
             "requested" -> if (isTv) null else (if (busy) "Searching…" else "Search again") to onRequest
             else -> null
         }
+        // Movies have no episodes: Down from these buttons goes to More Like This.
+        val down = if (isTv) Modifier else downToSimilar
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 4.dp)) {
             var first = true
-            fun Modifier.firstFocus(): Modifier = if (first) { first = false; focusRequester(actions) } else this
+            fun Modifier.firstFocus(): Modifier = then(down).let { if (first) { first = false; it.focusRequester(actions) } else it }
             primary?.let { (label, action) ->
                 SofarrButton(label, action, kind = ButtonKind.Primary, enabled = !busy || d.status == "owned", modifier = Modifier.firstFocus())
             }
@@ -331,6 +339,7 @@ private fun Seasons(
     d: TitleDetail,
     busy: Boolean,
     refresh: Int,
+    downToSimilar: Modifier,
     onRequest: (List<Int>, List<Int>?) -> Unit,
     onPlay: (String) -> Unit,
 ) {
@@ -370,7 +379,7 @@ private fun Seasons(
                 }
             }
         }
-        EpisodeList(api, d, season, busy, refresh, onRequest, onPlay)
+        EpisodeList(api, d, season, busy, refresh, downToSimilar, onRequest, onPlay)
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -382,6 +391,7 @@ private fun EpisodeList(
     season: SeasonInfo,
     busy: Boolean,
     refresh: Int,
+    downToSimilar: Modifier,
     onRequest: (List<Int>, List<Int>?) -> Unit,
     onPlay: (String) -> Unit,
 ) {
@@ -408,8 +418,9 @@ private fun EpisodeList(
         }
         eps.episodes.isEmpty() -> Text("No episodes listed yet.", color = Tokens.Muted, fontSize = 10.sp, modifier = Modifier.padding(vertical = 10.dp))
         else -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            eps.episodes.forEach { e ->
-                EpisodeRow(api, e, busy, requesting = busy && asked == e.number, onSelect = {
+            eps.episodes.forEachIndexed { i, e ->
+                val last = i == eps.episodes.lastIndex
+                EpisodeRow(api, e, busy, requesting = busy && asked == e.number, modifier = if (last) downToSimilar else Modifier, onSelect = {
                     val key = e.plexKey
                     if (key != null) onPlay(key)
                     else if (e.status == "available" || e.status == "upcoming") {
@@ -428,7 +439,7 @@ private fun minutesLeft(ms: Long): String {
 }
 
 @Composable
-private fun EpisodeRow(api: SofarrApi, e: EpisodeInfo, busy: Boolean, requesting: Boolean, onSelect: () -> Unit) {
+private fun EpisodeRow(api: SofarrApi, e: EpisodeInfo, busy: Boolean, requesting: Boolean, modifier: Modifier, onSelect: () -> Unit) {
     // What Enter does, as shown at the row's right edge.
     val (label, kind) = when {
         e.plexKey != null -> (if (e.progress != null) "▶ Resume" else "▶ Play") to "play"
@@ -444,7 +455,7 @@ private fun EpisodeRow(api: SofarrApi, e: EpisodeInfo, busy: Boolean, requesting
         e.airDate?.let(::shortDate),
         if (e.watched && e.progress == null) "Watched" else null,
     ).joinToString(" · ")
-    FocusBox(onClick = { if (!(kind == "get" && busy)) onSelect() }, modifier = Modifier.fillMaxWidth(), focusedScale = 1f) { focused ->
+    FocusBox(onClick = { if (!(kind == "get" && busy)) onSelect() }, modifier = modifier.fillMaxWidth(), focusedScale = 1f) { focused ->
         Row(
             Modifier.fillMaxWidth().background(if (focused) Tokens.BgHover else Color.Transparent).padding(7.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -505,11 +516,20 @@ private fun EpisodeRow(api: SofarrApi, e: EpisodeInfo, busy: Boolean, requesting
 }
 
 @Composable
-private fun MoreLikeThis(api: SofarrApi, mediaType: String, tmdbId: Int, onOpen: (RowItem) -> Unit) {
+private fun MoreLikeThis(
+    api: SofarrApi,
+    mediaType: String,
+    tmdbId: Int,
+    firstCard: FocusRequester,
+    onReady: (Boolean) -> Unit,
+    onOpen: (RowItem) -> Unit,
+) {
     var items by remember { mutableStateOf<List<RowItem>?>(null) }
     LaunchedEffect(mediaType, tmdbId) {
         items = runCatching { api.similar(mediaType, tmdbId) }.getOrDefault(emptyList()) // optional: the page is complete without it
     }
+    // Only point Down at the first card once it exists.
+    LaunchedEffect(items) { onReady(!items.isNullOrEmpty()) }
     val list = items
     if (list != null && list.isEmpty()) return
     Column(Modifier.background(Tokens.Bg).padding(horizontal = Tokens.Gutter).padding(top = 10.dp)) {
@@ -517,20 +537,23 @@ private fun MoreLikeThis(api: SofarrApi, mediaType: String, tmdbId: Int, onOpen:
         // A grid, four across (auto-fill of card-width columns on the web).
         val columns = 4
         val chunks = list?.chunked(columns) ?: List(2) { emptyList() }
-        chunks.forEach { chunk ->
+        Column {
+        chunks.forEachIndexed { r, chunk ->
             Row(Modifier.padding(vertical = 5.5.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 if (list == null) {
                     repeat(columns) { Box(Modifier.weight(1f).aspectRatio(16f / 9f).clip(RoundedCornerShape(Tokens.CardRadius)).background(Tokens.BgHover)) }
                 } else {
-                    chunk.forEach { t ->
+                    chunk.forEachIndexed { c, t ->
                         Box(Modifier.weight(1f)) {
                             TitleCard(t, (t.backdrop ?: t.poster)?.let(api::resolve), onClick = { onOpen(t) }, showYear = true,
-                                width = 214.dp, modifier = Modifier.fillMaxWidth())
+                                width = 214.dp,
+                                modifier = Modifier.fillMaxWidth().then(if (r == 0 && c == 0) Modifier.focusRequester(firstCard) else Modifier))
                         }
                     }
                     repeat(columns - chunk.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+        }
         }
     }
 }

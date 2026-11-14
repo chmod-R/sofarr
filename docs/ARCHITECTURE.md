@@ -74,7 +74,8 @@ watch. The existing pieces each cover only part of that:
 - **Who can sign in:** currently only the owner of the configured Plex server
   (`resources` → `owned`). Friends with shared access are a planned extension.
 - **Profiles are Plex Home users.** Selecting one switches via plex.tv (Plex enforces
-  profile PINs) and stores that profile's server access token. All Plex reads use the
+  profile PINs; the owner's own profile has no switch to make, so a PIN on it is checked
+  the same way, by switching to it) and stores that profile's server access token. All Plex reads use the
   selected profile's token, so history, Continue Watching and library visibility are
   per profile.
 - **Sessions:** a random cookie (`httpOnly`, `SameSite=Lax`), stored only as a SHA-256
@@ -155,7 +156,10 @@ but not yet scanned by Plex) > `requested` (tracked by *arr, nothing downloading
   so nothing is watchable until the whole pack finishes; episode searches look for
   single-episode releases (often scarcer for older shows).
 - **Slow lookups.** *arr metadata lookups go out to the internet (often via a VPN) and
-  can take 10+ seconds: 30 s timeout, 24 h cache. Title pages wait at most 3 s for
+  can take 10+ seconds: 30 s timeout, 24 h cache. Adding a movie or series does the same
+  lookup inside *arr before it answers, so adds get 30 s too; if even that runs out, *arr
+  usually still finishes, so Sofarr checks for the new item for another 30 s before
+  reporting a failure. Title pages wait at most 3 s for
   Sonarr, then answer with TMDb data while the lookup finishes into the cache.
 
 ### Season numbering

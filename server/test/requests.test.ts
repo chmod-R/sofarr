@@ -53,6 +53,8 @@ class FakeArr {
     ],
   ]);
   sonarrQueue: Array<Record<string, unknown>> = [{ seriesId: 7, episodeId: 702, downloadId: "H", size: 10, sizeleft: 5 }];
+  /** POST /movie adds the movie but answers after Sofarr's timeout. */
+  slowAdd = false;
   /** Calls to GET /episode before a new series' episodes "appear". */
   episodesAppearAfter = 0;
 
@@ -75,6 +77,8 @@ class FakeArr {
             const b = record(init, u);
             const added = { ...b, id: 99, hasFile: false };
             this.movies.push(added);
+            // Like Radarr fetching metadata through a slow VPN: it adds the movie, but answers too late.
+            if (this.slowAdd) throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
             return json(added, 201);
           }
           const tmdbId = u.searchParams.get("tmdbId");
@@ -308,6 +312,15 @@ describe("POST /api/requests (movies)", () => {
         },
       },
     ]);
+  });
+
+  it("reports success when Radarr adds the movie but answers too late", async () => {
+    const { post, arr } = await setup();
+    arr.slowAdd = true;
+    const res = await post({ mediaType: "movie", tmdbId: 603 });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ result: "added", title: { id: "movie:603", status: "requested" } });
+    expect(arr.writes.filter((w) => w.method === "POST")).toHaveLength(1); // no second add
   });
 
   it("re-enables and searches an unmonitored movie instead of adding a duplicate", async () => {

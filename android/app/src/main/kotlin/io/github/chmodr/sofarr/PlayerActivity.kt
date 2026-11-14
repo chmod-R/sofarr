@@ -162,19 +162,19 @@ class PlayerActivity : ComponentActivity() {
         player = ExoPlayer.Builder(this).build()
         player.addListener(listener)
         setContent { SofarrTheme { PlayerScreen() } }
-        open(plexKey)
+        open(plexKey, intent.getLongExtra(EXTRA_OFFSET_MS, -1).takeIf { it >= 0 })
     }
 
     // ---- Playback ----
 
-    /** Start a movie or episode (Plex decides where to resume). */
-    private fun open(plexKey: String) {
+    /** Start a movie or episode: where Plex says to resume, unless `offsetMs` is given. */
+    private fun open(plexKey: String, offsetMs: Long? = null) {
         fellBack = false
         stopped = false
         upNext = null
         lifecycleScope.launch {
             try {
-                begin(api.play(plexKey, direct = true, offsetMs = null, capabilities = null), null)
+                begin(api.play(plexKey, direct = true, offsetMs = offsetMs, capabilities = null), null)
             } catch (e: Exception) {
                 error = "Couldn't start playback (${e.message ?: e.javaClass.simpleName})."
             }
@@ -830,6 +830,8 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_PLEX_KEY = "plexKey"
+        /** Start here instead of the resume point (testing: debug builds let adb start the player). */
+        const val EXTRA_OFFSET_MS = "offsetMs"
         private const val TAG = "SofarrPlayer"
     }
 }

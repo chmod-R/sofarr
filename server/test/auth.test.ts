@@ -176,6 +176,19 @@ describe("profiles", () => {
     expect(ok.json().profile).toMatchObject({ uuid: "kid-uuid", isAdmin: false });
   });
 
+  it("enforces the PIN on the owner's own profile too", async () => {
+    const { app, cookie, plex, fetch } = await signedIn();
+    plex.users[0]!.home!.pin = "4321";
+    await app.inject({ url: "/api/profiles", headers: { cookie } }); // Plex now reports it protected
+    expect((await select(app, cookie, "owner-uuid")).json()).toEqual({ error: "pin_required" });
+    expect((await select(app, cookie, "owner-uuid", { pin: "1111" })).json()).toEqual({ error: "wrong_pin" });
+    const me = await app.inject({ url: "/api/auth/session", headers: { cookie } });
+    expect(me.json().profile).toBeNull(); // a wrong PIN selects nothing
+    const ok = await select(app, cookie, "owner-uuid", { pin: "4321" });
+    expect(ok.json().profile).toMatchObject({ uuid: "owner-uuid", isAdmin: true, isProtected: true });
+    expect(fetch.calls.filter((c) => c.includes("/owner-uuid/switch"))).toHaveLength(2);
+  });
+
   it("rejects unknown profiles", async () => {
     const { app, cookie } = await signedIn();
     expect((await select(app, cookie, "nope")).statusCode).toBe(404);

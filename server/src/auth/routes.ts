@@ -308,12 +308,17 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
         // The account's own profile uses the account token; others are switched via
         // Plex, which also enforces the profile PIN.
         let token: string | null = account.plex_token;
+        if (profile.is_protected && !body.data.pin) {
+          return reply.code(401).send({ error: "pin_required" });
+        }
         if (profile.plex_id !== account.id) {
-          if (profile.is_protected && !body.data.pin) {
-            return reply.code(401).send({ error: "pin_required" });
-          }
           token = await plexTv.switchHomeUser(account.plex_token, profile.uuid, body.data.pin);
           if (!token) return reply.code(403).send({ error: "wrong_pin" });
+        } else if (profile.is_protected) {
+          // The owner's own profile has a PIN too: have Plex check it the same way (switching
+          // to that profile), but keep using the account's token.
+          const checked = await plexTv.switchHomeUser(account.plex_token, profile.uuid, body.data.pin);
+          if (!checked) return reply.code(403).send({ error: "wrong_pin" });
         }
 
         const server = findServer(await plexTv.getResources(token), await serverId());
