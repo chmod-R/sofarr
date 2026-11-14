@@ -153,7 +153,7 @@ How it works and why: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | `GET /api/titles/:mediaType/:tmdbId` | Title page: details, trailer, status, seasons |
 | `GET /api/titles/tv/:tmdbId/seasons/:n` | One season's episodes with status and watch state |
 | `POST /api/requests`, `GET /api/requests` | "Get it", and request history |
-| `POST /api/play` | Start playback; returns an HLS URL and audio/subtitle tracks |
+| `POST /api/play` | Start playback; returns an HLS URL (or, with `mode: "direct"`, the original file's URL) and audio/subtitle tracks |
 | `POST /api/play/:id/tracks` | Switch audio/subtitles |
 | `POST /api/play/:id/progress` | Report position/state to Plex |
 | `GET /api/plex/image` | Resized Plex artwork |

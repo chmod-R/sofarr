@@ -8,19 +8,24 @@ import { plexImageUrl } from "../catalog/titles.js";
 import { UpstreamError } from "../upstreams/http.js";
 import { type Capabilities, chooseProfile, type PlexItem, type PlexPlayback, type StreamProfile, tracksOf } from "./plexPlayback.js";
 
-/** One playback in progress. The id is an unguessable capability: media requests from <video> may not carry cookies. */
-interface PlaySession {
+/**
+ * One playback in progress. The id is an unguessable capability: media requests
+ * (from <video> or a native player) may not carry cookies.
+ * `hls`: Plex's transcoder, proxied. `direct`: the original file, proxied.
+ */
+type PlaySession = {
   id: string;
   plexSession: string;
   token: string;
   profileUuid: string;
   ratingKey: string;
   durationMs: number;
-  profile: StreamProfile;
-  capabilities: Capabilities;
   offsetSec: number;
   lastSeen: number;
-}
+} & (
+  | { mode: "hls"; profile: StreamProfile; capabilities: Capabilities }
+  | { mode: "direct"; partKey: string }
+);
 
 const IDLE_MS = 30 * 60 * 1000; // a paused player pings; silence this long means it's gone
 const MAX_SESSIONS = 50;
@@ -30,15 +35,35 @@ const playBody = z
     plexKey: z.string().regex(/^\d+$/),
     /** Override the resume point (ms). Omit to resume where Plex says; 0 = from the start. */
     offsetMs: z.number().int().min(0).optional(),
-    capabilities: z.object({
-      nativeHls: z.boolean(),
-      hevc: z.boolean(),
-      hevcMain10: z.boolean(),
-      eac3: z.boolean(),
-      ac3: z.boolean(),
-    }),
+    /** `direct`: the original file (native app). `hls` (default): Plex transcoder, needs capabilities. */
+    mode: z.enum(["hls", "direct"]).optional(),
+    capabilities: z
+      .object({
+        nativeHls: z.boolean(),
+        hevc: z.boolean(),
+        hevcMain10: z.boolean(),
+        eac3: z.boolean(),
+        ac3: z.boolean(),
+      })
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((b) => b.mode === "direct" || b.capabilities !== undefined);
+
+type PlayRequest = { mode: "hls"; capabilities: Capabilities } | { mode: "direct" };
+
+/** Only a part's own file may be fetched: `/library/parts/<id>/<n>/file[.ext]`. */
+const PART_KEY = /^\/library\/parts\/\d+\/\d+\/file(\.[A-Za-z0-9]{1,8})?$/;
+const RANGE = /^bytes=\d*-\d*$/;
+const FILE_TYPES: Record<string, string> = {
+  mkv: "video/x-matroska",
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  mov: "video/quicktime",
+  ts: "video/mp2t",
+  avi: "video/x-msvideo",
+  webm: "video/webm",
+};
 
 const progressBody = z
   .object({
@@ -77,7 +102,7 @@ export function registerPlaybackRoutes(
 
   const end = async (s: PlaySession) => {
     sessions.delete(s.id);
-    await deps.plex.stop(s.token, s.plexSession).catch(() => undefined);
+    if (s.mode === "hls") await deps.plex.stop(s.token, s.plexSession).catch(() => undefined);
   };
 
   const sweeper = setInterval(() => {
@@ -102,46 +127,57 @@ export function registerPlaybackRoutes(
     profileUuid: string,
     item: PlexItem,
     offsetMs: number,
-    capabilities: Capabilities,
+    req: PlayRequest,
     log: { info: (o: object, m: string) => void },
   ) => {
+    const media = item.Media?.[0];
+    const partKey = media?.Part?.[0]?.key;
+    if (req.mode === "direct" && (!partKey || !PART_KEY.test(partKey))) return undefined;
     if (sessions.size >= MAX_SESSIONS) {
       const oldest = [...sessions.values()].sort((a, b) => a.lastSeen - b.lastSeen)[0];
       if (oldest) await end(oldest);
     }
-    const streamProfile = chooseProfile(capabilities);
-    const s: PlaySession = {
+    const base = {
       id: randomBytes(24).toString("base64url"),
       plexSession: `sofarr-${randomBytes(9).toString("base64url")}`,
       token,
       profileUuid,
       ratingKey: item.ratingKey,
       durationMs: item.duration ?? 0,
-      profile: streamProfile,
-      capabilities,
       offsetSec: offsetMs / 1000,
       lastSeen: Date.now(),
     };
-    const [decision, next] = await Promise.all([
-      deps.plex.decision(token, s.ratingKey, s.plexSession, streamProfile, s.offsetSec),
-      deps.plex.nextEpisode(token, item).catch(() => undefined),
-    ]);
+    const next = deps.plex.nextEpisode(token, item).catch(() => undefined);
+    let s: PlaySession;
+    let decision: { video: string; audio: string };
+    if (req.mode === "direct") {
+      s = { ...base, mode: "direct", partKey: partKey! };
+      decision = { video: "direct", audio: "direct" };
+      log.info({ ratingKey: s.ratingKey, mode: "direct", container: media?.container, video: media?.videoCodec, audio: media?.audioCodec }, "playback started");
+    } else {
+      const profile = chooseProfile(req.capabilities);
+      s = { ...base, mode: "hls", profile, capabilities: req.capabilities };
+      decision = await deps.plex.decision(token, s.ratingKey, s.plexSession, profile, s.offsetSec);
+      log.info(
+        { ratingKey: s.ratingKey, profile: profile.profileName ?? profile.platform, video: decision.video, audio: decision.audio },
+        "playback started",
+      );
+    }
     sessions.set(s.id, s);
-    log.info(
-      { ratingKey: s.ratingKey, profile: streamProfile.profileName ?? streamProfile.platform, video: decision.video, audio: decision.audio },
-      "playback started",
-    );
+    const nextItem = await next;
     return {
       id: s.id,
-      src: `/api/play/${s.id}/start.m3u8`,
+      mode: s.mode,
+      src: s.mode === "direct" ? `/api/play/${s.id}/file` : `/api/play/${s.id}/start.m3u8`,
       ratingKey: s.ratingKey,
       ...label(item),
       summary: item.summary || null,
       durationMs: s.durationMs,
       startMs: offsetMs,
       decision: { video: decision.video, audio: decision.audio },
+      media: { container: media?.container ?? null, videoCodec: media?.videoCodec ?? null, audioCodec: media?.audioCodec ?? null },
       tracks: tracksOf(item),
-      next: next ? { plexKey: next.ratingKey, ...label(next), thumb: plexImageUrl(next.thumb ?? null, "backdrop") } : null,
+      next: nextItem ? { plexKey: nextItem.ratingKey, ...label(nextItem), thumb: plexImageUrl(nextItem.thumb ?? null, "backdrop") } : null,
     };
   };
 
@@ -168,7 +204,10 @@ export function registerPlaybackRoutes(
       let offsetMs = body.data.offsetMs ?? item.viewOffset ?? 0;
       if (durationMs && offsetMs > durationMs * 0.95) offsetMs = 0;
 
-      return await start(token, profile.uuid, item, offsetMs, body.data.capabilities, request.log);
+      const { mode = "hls", capabilities } = body.data;
+      const req: PlayRequest = mode === "direct" ? { mode } : { mode, capabilities: capabilities! };
+      const started = await start(token, profile.uuid, item, offsetMs, req, request.log);
+      return started ?? reply.code(409).send({ error: "no_media_part" });
     } catch (err) {
       return fail(reply, err);
     }
@@ -191,9 +230,39 @@ export function registerPlaybackRoutes(
     return reply.send(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream));
   };
 
+  /** Direct play: the original file, with byte ranges so the player can seek. */
+  app.get<{ Params: { id: string } }>("/api/play/:id/file", async (request, reply) => {
+    const s = getSession(request.params.id);
+    if (!s || s.mode !== "direct") return reply.code(404).send();
+    const range = request.headers.range;
+    if (range !== undefined && !RANGE.test(range)) return reply.code(416).send();
+    // Players drop connections when they seek: stop reading from Plex too.
+    const abort = new AbortController();
+    request.raw.once("close", () => abort.abort());
+    let res: Response;
+    try {
+      res = await deps.plex.file(s.token, s.partKey, range, abort.signal);
+    } catch {
+      return reply.code(502).send();
+    }
+    if (res.status === 416) return reply.code(416).send();
+    if ((res.status !== 200 && res.status !== 206) || !res.body) return reply.code(res.status === 404 ? 404 : 502).send();
+    const ext = s.partKey.split(".").at(-1)?.toLowerCase() ?? "";
+    reply
+      .code(res.status)
+      .header("Content-Type", FILE_TYPES[ext] ?? res.headers.get("content-type") ?? "application/octet-stream")
+      .header("Accept-Ranges", "bytes")
+      .header("Cache-Control", "no-store");
+    for (const h of ["content-length", "content-range"]) {
+      const v = res.headers.get(h);
+      if (v) reply.header(h, v);
+    }
+    return reply.send(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream));
+  });
+
   app.get<{ Params: { id: string } }>("/api/play/:id/start.m3u8", async (request, reply) => {
     const s = getSession(request.params.id);
-    if (!s) return reply.code(404).send();
+    if (!s || s.mode !== "hls") return reply.code(404).send();
     try {
       const q = deps.plex.streamParams(s.ratingKey, s.plexSession, s.profile, s.offsetSec);
       const res = await deps.plex.transcoder(s.token, s.plexSession, s.profile, "start.m3u8", q);
@@ -209,7 +278,7 @@ export function registerPlaybackRoutes(
     async (request, reply) => {
       const s = getSession(request.params.id);
       const { plexSession, file } = request.params;
-      if (!s || plexSession !== s.plexSession || !FILE.test(file)) return reply.code(404).send();
+      if (!s || s.mode !== "hls" || plexSession !== s.plexSession || !FILE.test(file)) return reply.code(404).send();
       const type = file.endsWith(".m3u8")
         ? "application/vnd.apple.mpegurl"
         : s.profile.container === "mp4"
@@ -238,6 +307,8 @@ export function registerPlaybackRoutes(
   app.post<{ Params: { id: string } }>("/api/play/:id/tracks", async (request, reply) => {
     const s = getSession(request.params.id);
     if (!s) return reply.code(404).send({ error: "no_such_playback" });
+    // Direct play has every track in the file: the player switches itself.
+    if (s.mode !== "hls") return reply.code(409).send({ error: "switch_tracks_in_player" });
     const body = tracksBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_tracks" });
     try {
@@ -260,7 +331,7 @@ export function registerPlaybackRoutes(
       await deps.plex.timeline(s.token, s.plexSession, s.ratingKey, "paused", timeMs, s.durationMs).catch(() => undefined);
       await end(s);
       const updated = (await deps.plex.item(s.token, s.ratingKey)) ?? item;
-      return await start(s.token, s.profileUuid, updated, timeMs, s.capabilities, request.log);
+      return await start(s.token, s.profileUuid, updated, timeMs, { mode: "hls", capabilities: s.capabilities }, request.log);
     } catch (err) {
       return fail(reply, err);
     }
@@ -278,7 +349,7 @@ export function registerPlaybackRoutes(
       // Resume points / watched flags changed: don't serve cached library data.
       if (state !== "playing") deps.onWatchStateChanged?.();
       if (state === "stopped") await end(s);
-      else await deps.plex.ping(s.token, s.plexSession).catch(() => undefined);
+      else if (s.mode === "hls") await deps.plex.ping(s.token, s.plexSession).catch(() => undefined);
       return { ok: true };
     } catch (err) {
       return fail(reply, err);

@@ -188,7 +188,8 @@ Sonarr's season 17. Requests go to Sonarr, so:
 Sofarr has its own player. Plex's universal transcoder produces HLS, and Sofarr proxies
 it:
 
-- `POST /api/play` resolves what to play (a show plays Plex's on-deck episode; resumes
+- `POST /api/play` (default `mode: "hls"`; the app's `direct` mode is under
+  [Android TV app](#android-tv-app)) resolves what to play (a show plays Plex's on-deck episode; resumes
   where Plex says, from the start if within the last 5%), asks Plex for a decision, and
   returns `/api/play/<id>/start.m3u8`. The id is an unguessable capability, because
   `<video>` requests may not carry cookies. The Plex token only travels in server→Plex
@@ -230,8 +231,8 @@ it:
 
 ## Android TV app
 
-The client, in `android/`. It's at the very start: it asks for the server's address
-on first launch and checks `/api/health`. Sign-in, Home and native playback come next.
+The client, in `android/`. So far: server address, Plex sign-in, profiles, Home rows
+and playback. Title pages, search, requests and player extras (tracks, up next) come next.
 
 - **Target:** the Google TV Streamer only (`minSdk` 34, Android TV 14). The manifest
   requires `android.software.leanback`, so it appears in the TV launcher (with a 16:9
@@ -256,9 +257,17 @@ on first launch and checks `/api/health`. Sign-in, Home and native playback come
   volume `sofarr-android-cache`. If it's lost, pair again, and uninstall the app before
   the next install (the signing key changes). Builds use one JVM with the Kotlin compiler
   in-process, so they fit on a small server.
-- **Playback (next):** Media3/ExoPlayer. The server tells the app what to play; the app
-  plays the file directly where the Streamer can decode it and falls back to a Plex
-  transcode for the rest.
+- **Session:** the same cookie session as the web UI, kept in the app's preferences
+  (OkHttp cookie jar). Artwork loads through the same client (Coil), so
+  `/api/plex/image` works unchanged. The app sends no `Origin`, which the CSRF guard allows.
+- **Playback:** Media3/ExoPlayer, direct play first. `POST /api/play` with
+  `mode: "direct"` starts no Plex transcode; `/api/play/<id>/file` streams the part's
+  original file through Sofarr with byte ranges (the token stays server-side, as for HLS).
+  ExoPlayer quietly skips tracks it can't decode, so the app checks the tracks: with no
+  playable video or audio (or a decoder error), it reports "stopped" and asks for
+  `mode: "hls"` with its decoders as capabilities (`nativeHls: false`, so fMP4), resuming
+  at the same position. Direct sessions switch audio/subtitles in the player (the
+  `/tracks` route answers 409). Progress reports work the same for both.
 
 ## Legacy web UI
 

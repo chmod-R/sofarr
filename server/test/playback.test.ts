@@ -34,9 +34,13 @@ class FakeStream {
       viewOffset: 1_200_000,
       Media: [
         {
+          container: "mkv",
+          videoCodec: "hevc",
+          audioCodec: "eac3",
           Part: [
             {
               id: 55,
+              key: "/library/parts/55/1690000000/file.mkv",
               Stream: [
                 { id: 1, streamType: 1, codec: "hevc" },
                 { id: 2, streamType: 2, codec: "eac3", languageTag: "en", extendedDisplayTitle: "English (EAC3 5.1)", selected: true },
@@ -139,6 +143,24 @@ class FakeStream {
             for (const st of streams) if (st.streamType === type) st.selected = String(st.id) === v;
           }
           return new Response("");
+        }),
+      ],
+      [
+        /^http:\/\/plex:32400\/library\/parts\/\d+\/\d+\/file\.\w+$/,
+        authed((u, init) => {
+          log(u, init);
+          // A 10-byte file; honours "bytes=a-b" / "bytes=a-" like Plex.
+          const file = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+          const range = header(init, "range");
+          if (!range) return new Response(file, { headers: { "content-type": "video/x-matroska", "content-length": "10", "accept-ranges": "bytes" } });
+          const [, a, b] = /^bytes=(\d+)-(\d*)$/.exec(range)!;
+          const start = Number(a);
+          if (start >= file.length) return new Response(null, { status: 416 });
+          const end = b ? Math.min(Number(b), file.length - 1) : file.length - 1;
+          return new Response(file.slice(start, end + 1), {
+            status: 206,
+            headers: { "content-range": `bytes ${start}-${end}/10`, "content-length": String(end - start + 1) },
+          });
         }),
       ],
       [`${PLEX_URL}/video/:/transcode/universal/ping`, authed((u, init) => (log(u, init), new Response("")))],
@@ -330,5 +352,78 @@ describe("audio and subtitle tracks", () => {
     const off = (await post({ subtitleStreamId: 0, timeMs: 10 })).json();
     expect(stream.partSelections).toEqual([{ subtitleStreamID: "0", allParts: "1" }]);
     expect(off.tracks.subtitles.every((x: { selected: boolean }) => !x.selected)).toBe(true);
+  });
+});
+
+describe("direct play (native app)", () => {
+  const direct = async () => {
+    const ctx = await setup();
+    const res = await ctx.app.inject({ method: "POST", url: "/api/play", headers: { cookie: ctx.cookie }, payload: { plexKey: "10", mode: "direct" } });
+    return { ...ctx, res, p: res.json() };
+  };
+
+  it("starts without a Plex transcode and describes the file", async () => {
+    const { res, p, stream } = await direct();
+    expect(res.statusCode).toBe(200);
+    expect(p).toMatchObject({
+      mode: "direct",
+      title: "The Matrix",
+      startMs: 1_200_000,
+      decision: { video: "direct", audio: "direct" },
+      media: { container: "mkv", videoCodec: "hevc", audioCodec: "eac3" },
+    });
+    expect(p.src).toBe(`/api/play/${p.id}/file`);
+    expect(p.tracks.audio).toHaveLength(2);
+    expect(stream.calls.some((c) => c.path.includes("/transcode/"))).toBe(false);
+  });
+
+  it("streams the file with byte ranges, the token only in a header", async () => {
+    const { app, p, stream } = await direct();
+    const whole = await app.inject({ url: p.src }); // no cookie: the id is the capability
+    expect(whole.statusCode).toBe(200);
+    expect(whole.headers["content-type"]).toBe("video/x-matroska");
+    expect(whole.headers["accept-ranges"]).toBe("bytes");
+    expect(whole.headers["content-length"]).toBe("10");
+    expect([...whole.rawPayload]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    const part = await app.inject({ url: p.src, headers: { range: "bytes=4-6" } });
+    expect(part.statusCode).toBe(206);
+    expect(part.headers["content-range"]).toBe("bytes 4-6/10");
+    expect([...part.rawPayload]).toEqual([4, 5, 6]);
+    const tail = await app.inject({ url: p.src, headers: { range: "bytes=8-" } });
+    expect([...tail.rawPayload]).toEqual([8, 9]);
+
+    expect((await app.inject({ url: p.src, headers: { range: "bytes=20-" } })).statusCode).toBe(416);
+    expect((await app.inject({ url: p.src, headers: { range: "lines=1-2" } })).statusCode).toBe(416);
+    const fileCalls = stream.calls.filter((c) => c.path.startsWith("/library/parts/"));
+    expect(fileCalls[0]!.path).toBe("/library/parts/55/1690000000/file.mkv");
+    expect(fileCalls.every((c) => c.headers.get("x-plex-token") === "srv-owner" && !c.params.toString().includes("srv-owner"))).toBe(true);
+  });
+
+  it("keeps direct and HLS sessions apart", async () => {
+    const { app, p, play } = await direct();
+    expect((await app.inject({ url: `/api/play/${p.id}/start.m3u8` })).statusCode).toBe(404);
+    const hls = (await play({ plexKey: "10" })).json();
+    expect((await app.inject({ url: `/api/play/${hls.id}/file` })).statusCode).toBe(404);
+    const tracks = await app.inject({ method: "POST", url: `/api/play/${p.id}/tracks`, payload: { audioStreamId: 3, timeMs: 0 } });
+    expect(tracks.json()).toEqual({ error: "switch_tracks_in_player" });
+  });
+
+  it("reports progress to Plex without transcoder pings or stops", async () => {
+    const { app, p, stream } = await direct();
+    const progress = (payload: object) => app.inject({ method: "POST", url: `/api/play/${p.id}/progress`, payload });
+    expect((await progress({ timeMs: 1_300_000, state: "playing" })).json()).toEqual({ ok: true });
+    expect((await progress({ timeMs: 1_400_000, state: "stopped" })).statusCode).toBe(200);
+    expect(stream.calls.filter((c) => c.path === "/:/timeline").map((c) => c.params.get("state"))).toEqual(["playing", "stopped"]);
+    expect(stream.calls.some((c) => c.path.endsWith("/ping") || c.path.endsWith("/stop"))).toBe(false);
+    expect((await app.inject({ url: p.src })).statusCode).toBe(404);
+  });
+
+  it("refuses items without a playable file, and HLS without capabilities", async () => {
+    const { app, cookie } = await setup();
+    const post = (payload: object) => app.inject({ method: "POST", url: "/api/play", headers: { cookie }, payload });
+    expect((await post({ plexKey: "11", mode: "direct" })).json()).toEqual({ error: "no_media_part" }); // no Media
+    expect((await post({ plexKey: "10" })).statusCode).toBe(400);
+    expect((await post({ plexKey: "10", mode: "stream" })).statusCode).toBe(400);
   });
 });

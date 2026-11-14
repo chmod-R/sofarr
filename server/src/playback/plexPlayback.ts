@@ -58,7 +58,12 @@ export interface PlexItem {
   summary?: string;
   thumb?: string;
   OnDeck?: { Metadata?: PlexItem };
-  Media?: Array<{ Part?: Array<{ id: number; Stream?: PlexStream[] }> }>;
+  Media?: Array<{
+    container?: string;
+    videoCodec?: string;
+    audioCodec?: string;
+    Part?: Array<{ id: number; key?: string; Stream?: PlexStream[] }>;
+  }>;
 }
 
 export interface PlexStream {
@@ -295,6 +300,18 @@ export class PlexPlayback {
       audio: streams.find((s) => s.streamType === 2)?.decision ?? "unknown",
       text: body.MediaContainer.generalDecisionText ?? "",
     };
+  }
+
+  /**
+   * The media file itself, for direct play. `partKey` is the part's
+   * `/library/parts/...` key; `range` is forwarded so the player can seek.
+   * No timeout: a whole film streams through one request.
+   */
+  file(token: string, partKey: string, range: string | undefined, signal: AbortSignal): Promise<Response> {
+    return this.fetch(`${this.url}${partKey}`, {
+      headers: this.headers(token, range ? { Range: range } : {}),
+      signal,
+    });
   }
 
   /** Raw request to Plex's transcoder (playlists and segments), for proxying. */
