@@ -198,10 +198,31 @@ data class PlayStart(
     val startMs: Long = 0,
     val media: PlayMedia? = null,
     val tracks: PlayTracks? = null,
+    /** Synopsis of what's playing. */
+    val summary: String? = null,
+    val decision: Decision? = null,
+    val next: NextEpisode? = null,
 )
 
-@Serializable data class PlayTracks(val audio: List<PlayTrack> = emptyList())
-@Serializable data class PlayTrack(val id: Int, val label: String, val language: String? = null, val selected: Boolean = false)
+@Serializable data class Decision(val video: String = "", val audio: String = "")
+@Serializable data class NextEpisode(val plexKey: String, val title: String, val subtitle: String? = null, val thumb: String? = null)
+@Serializable data class PlayTracks(val audio: List<PlayTrack> = emptyList(), val subtitles: List<PlayTrack> = emptyList())
+
+@Serializable
+data class PlayTrack(
+    val id: Int,
+    val label: String,
+    val language: String? = null,
+    val selected: Boolean = false,
+    /** Position in the media file; null for a sidecar subtitle file. */
+    val index: Int? = null,
+    val forced: Boolean = false,
+    val codec: String? = null,
+    val external: Boolean = false,
+)
+
+/** /tracks: a new session (HLS: Plex restarts the stream), or the same one with the saved choice (direct play). */
+@Serializable data class TracksResult(val id: String, val mode: String = "hls", val tracks: PlayTracks? = null)
 
 @Serializable data class PlayMedia(val container: String? = null, val videoCodec: String? = null, val audioCodec: String? = null)
 
@@ -269,6 +290,20 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
             if (capabilities != null) put("capabilities", json.encodeToJsonElement(Capabilities.serializer(), capabilities))
         }
         return post("/api/play", body, PlayStart.serializer())
+    }
+
+    /** Save an audio / subtitle choice to Plex (0 = subtitles off). */
+    suspend fun tracksDirect(id: String, audioStreamId: Int?, subtitleStreamId: Int?, timeMs: Long): TracksResult =
+        post("/api/play/$id/tracks", tracksBody(audioStreamId, subtitleStreamId, timeMs), TracksResult.serializer())
+
+    /** HLS: Plex restarts the stream with the new tracks at `timeMs`; a new session. */
+    suspend fun tracksHls(id: String, audioStreamId: Int?, subtitleStreamId: Int?, timeMs: Long): PlayStart =
+        post("/api/play/$id/tracks", tracksBody(audioStreamId, subtitleStreamId, timeMs), PlayStart.serializer())
+
+    private fun tracksBody(audioStreamId: Int?, subtitleStreamId: Int?, timeMs: Long) = buildJsonObject {
+        if (audioStreamId != null) put("audioStreamId", audioStreamId)
+        if (subtitleStreamId != null) put("subtitleStreamId", subtitleStreamId)
+        put("timeMs", timeMs)
     }
 
     suspend fun progress(id: String, timeMs: Long, state: String) {

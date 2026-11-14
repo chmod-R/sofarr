@@ -231,8 +231,17 @@ it:
 
 ## Android TV app
 
-The client, in `android/`. So far: server address, Plex sign-in, profiles, Home rows
-and playback. Title pages, search, requests and player extras (tracks, up next) come next.
+The client, in `android/`: server address, Plex sign-in and profiles, Home, title pages
+with requests, search, and the player (tracks, up next). Not yet: My Library.
+
+- **Look:** the web UI's design, carried over (`Ui.kt` holds its tokens). The web sizes in
+  rem with the root at ~1.05vw, so on a 1080p TV 1 rem is about 10 dp of Android TV's
+  960×540 dp screen: cards 182 dp, gutter 38 dp, hero 56% of the height, and so on. Same
+  colours, focus ring (2 dp page-coloured gap, 2 dp accent), buttons, pills, cards
+  (ribbons, badges, progress, outlined Top 10 numerals), hero with title logos, title
+  pages, search keyboard, PIN pad and player overlay. Home pins the selected card to its
+  row's left edge and the row to the top (a `BringIntoViewSpec`); other screens scroll
+  only as far as needed, like a web page (Compose's TV default centres things instead).
 
 - **Target:** the Google TV Streamer only (`minSdk` 34, Android TV 14). The manifest
   requires `android.software.leanback`, so it appears in the TV launcher (with a 16:9
@@ -264,10 +273,20 @@ and playback. Title pages, search, requests and player extras (tracks, up next) 
   `mode: "direct"` starts no Plex transcode; `/api/play/<id>/file` streams the part's
   original file through Sofarr with byte ranges (the token stays server-side, as for HLS).
   ExoPlayer quietly skips tracks it can't decode, so the app checks the tracks: with no
-  playable video or audio (or a decoder error), it reports "stopped" and asks for
-  `mode: "hls"` with its decoders as capabilities (`nativeHls: false`, so fMP4), resuming
-  at the same position. Direct sessions switch audio/subtitles in the player (the
-  `/tracks` route answers 409). Progress reports work the same for both.
+  playable video, if the audio track selected in Plex can't be decoded, or on a decoder
+  error, it reports "stopped" and asks for `mode: "hls"` with its decoders as
+  capabilities (`nativeHls: false`, so fMP4), resuming at the same position.
+- **Tracks:** `/api/play` lists each track's position in the file (`index`, null for a
+  sidecar subtitle file, which is `external`). In direct play the app maps Plex's
+  selection onto ExoPlayer's tracks (by position, else by order), so audio and embedded
+  subtitles (SRT, ASS, PGS…) switch instantly with no conversion; `/tracks` on a direct
+  session only saves the choice to Plex. Sidecar files, or formats the player can't
+  draw, fall back to Plex burning them in (HLS), as on the web. Progress reports work
+  the same in both modes.
+- **Player:** the web player's overlay and keys: Enter play/pause, ←/→ 10 s with a
+  running total, fast-forward/rewind 30 s, ↓ the button row (Start over, Next episode,
+  Audio & Subtitles), Back exits; "You're watching" after 6 s paused; up-next card with a
+  10 s countdown. The pill says Direct play, Direct stream or Converting.
 
 ## Legacy web UI
 

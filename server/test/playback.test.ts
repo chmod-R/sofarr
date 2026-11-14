@@ -42,12 +42,12 @@ class FakeStream {
               id: 55,
               key: "/library/parts/55/1690000000/file.mkv",
               Stream: [
-                { id: 1, streamType: 1, codec: "hevc" },
-                { id: 2, streamType: 2, codec: "eac3", languageTag: "en", extendedDisplayTitle: "English (EAC3 5.1)", selected: true },
-                { id: 3, streamType: 2, codec: "aac", languageTag: "fr", extendedDisplayTitle: "Français (AAC Stereo)" },
-                { id: 4, streamType: 3, codec: "srt", languageTag: "en", extendedDisplayTitle: "English (SRT)" },
-                { id: 5, streamType: 3, codec: "pgs", languageTag: "en", extendedDisplayTitle: "English Forced (PGS)", forced: true },
-                { id: 6, streamType: 3, codec: "eia_608", extendedDisplayTitle: "CC" },
+                { id: 1, streamType: 1, codec: "hevc", index: 0 },
+                { id: 2, streamType: 2, codec: "eac3", index: 1, languageTag: "en", extendedDisplayTitle: "English (EAC3 5.1)", selected: true },
+                { id: 3, streamType: 2, codec: "aac", index: 2, languageTag: "fr", extendedDisplayTitle: "Français (AAC Stereo)" },
+                { id: 4, streamType: 3, codec: "srt", key: "/library/streams/4", languageTag: "en", extendedDisplayTitle: "English (SRT)" },
+                { id: 5, streamType: 3, codec: "pgs", index: 3, languageTag: "en", extendedDisplayTitle: "English Forced (PGS)", forced: true },
+                { id: 6, streamType: 3, codec: "eia_608", index: 4, extendedDisplayTitle: "CC" },
               ],
             },
           ],
@@ -309,12 +309,13 @@ describe("audio and subtitle tracks", () => {
     expect(p.tracks).toEqual({
       partId: 55,
       audio: [
-        { id: 2, label: "English (EAC3 5.1)", language: "en", selected: true },
-        { id: 3, label: "Français (AAC Stereo)", language: "fr", selected: false },
+        { id: 2, label: "English (EAC3 5.1)", language: "en", selected: true, index: 1 },
+        { id: 3, label: "Français (AAC Stereo)", language: "fr", selected: false, index: 2 },
       ],
       subtitles: [
-        { id: 4, label: "English (SRT)", language: "en", selected: false, forced: false, kind: "text" },
-        { id: 5, label: "English Forced (PGS)", language: "en", selected: false, forced: true, kind: "image" },
+        // A sidecar file: not in the media file, so no index.
+        { id: 4, label: "English (SRT)", language: "en", selected: false, index: null, forced: false, kind: "text", codec: "srt", external: true },
+        { id: 5, label: "English Forced (PGS)", language: "en", selected: false, index: 3, forced: true, kind: "image", codec: "pgs", external: false },
       ],
     });
   });
@@ -405,8 +406,19 @@ describe("direct play (native app)", () => {
     expect((await app.inject({ url: `/api/play/${p.id}/start.m3u8` })).statusCode).toBe(404);
     const hls = (await play({ plexKey: "10" })).json();
     expect((await app.inject({ url: `/api/play/${hls.id}/file` })).statusCode).toBe(404);
-    const tracks = await app.inject({ method: "POST", url: `/api/play/${p.id}/tracks`, payload: { audioStreamId: 3, timeMs: 0 } });
-    expect(tracks.json()).toEqual({ error: "switch_tracks_in_player" });
+  });
+
+  it("saves a track choice to Plex without restarting anything", async () => {
+    const { app, p, stream } = await direct();
+    const res = await app.inject({ method: "POST", url: `/api/play/${p.id}/tracks`, payload: { audioStreamId: 3, subtitleStreamId: 4, timeMs: 5_000 } });
+    expect(res.statusCode).toBe(200);
+    const r = res.json();
+    expect(r.id).toBe(p.id); // same session, same file
+    expect(r.mode).toBe("direct");
+    expect(stream.partSelections).toEqual([{ audioStreamID: "3", subtitleStreamID: "4", allParts: "1" }]);
+    expect(r.tracks.audio.find((a: { selected: boolean }) => a.selected).id).toBe(3);
+    expect(stream.calls.some((c) => c.path.includes("/transcode/") || c.path.endsWith("/stop"))).toBe(false);
+    expect((await app.inject({ url: p.src })).statusCode).toBe(200);
   });
 
   it("reports progress to Plex without transcoder pings or stops", async () => {

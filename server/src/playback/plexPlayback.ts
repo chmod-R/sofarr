@@ -69,6 +69,10 @@ export interface PlexItem {
 export interface PlexStream {
   id: number;
   streamType: number; // 1 video, 2 audio, 3 subtitle
+  /** Position of the stream in the media file (absent for sidecar subtitle files). */
+  index?: number;
+  /** Set for sidecar subtitle files (served by Plex, not inside the media file). */
+  key?: string;
   codec?: string;
   language?: string;
   languageTag?: string;
@@ -85,13 +89,15 @@ export interface Track {
   label: string;
   language: string | null;
   selected: boolean;
+  /** Position in the media file, for players that pick tracks themselves (direct play); null if not in it. */
+  index: number | null;
 }
 
 export interface Tracks {
   partId: number | null;
   audio: Track[];
-  /** `image` subtitles (PGS, VobSub, DVB) and text ones are both burned in. */
-  subtitles: Array<Track & { forced: boolean; kind: "text" | "image" }>;
+  /** `image` subtitles (PGS, VobSub, DVB) and text ones are both burned in (HLS). `external`: a sidecar file. */
+  subtitles: Array<Track & { forced: boolean; kind: "text" | "image"; codec: string | null; external: boolean }>;
 }
 
 const IMAGE_SUBS = new Set(["pgs", "vobsub", "dvd_subtitle", "dvb_subtitle", "hdmv_pgs_subtitle", "xsub"]);
@@ -105,13 +111,20 @@ export function tracksOf(item: PlexItem): Tracks {
     label: s.extendedDisplayTitle ?? s.displayTitle ?? s.language ?? `Track ${s.id}`,
     language: s.languageTag ?? s.language ?? null,
     selected: Boolean(s.selected),
+    index: s.key ? null : (s.index ?? null),
   });
   return {
     partId: part?.id ?? null,
     audio: streams.filter((s) => s.streamType === 2).map(base),
     subtitles: streams
       .filter((s) => s.streamType === 3 && s.codec !== "eia_608") // 608 captions live inside the video; not selectable here
-      .map((s) => ({ ...base(s), forced: Boolean(s.forced), kind: IMAGE_SUBS.has(s.codec ?? "") ? "image" : "text" })),
+      .map((s) => ({
+        ...base(s),
+        forced: Boolean(s.forced),
+        kind: IMAGE_SUBS.has(s.codec ?? "") ? "image" : "text",
+        codec: s.codec ?? null,
+        external: Boolean(s.key),
+      })),
   };
 }
 

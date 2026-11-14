@@ -307,8 +307,6 @@ export function registerPlaybackRoutes(
   app.post<{ Params: { id: string } }>("/api/play/:id/tracks", async (request, reply) => {
     const s = getSession(request.params.id);
     if (!s) return reply.code(404).send({ error: "no_such_playback" });
-    // Direct play has every track in the file: the player switches itself.
-    if (s.mode !== "hls") return reply.code(409).send({ error: "switch_tracks_in_player" });
     const body = tracksBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_tracks" });
     try {
@@ -327,6 +325,11 @@ export function registerPlaybackRoutes(
         ...(audioStreamId !== undefined && { audioStreamId }),
         ...(subtitleStreamId !== undefined && { subtitleStreamId }),
       });
+      // Direct play: the player switches tracks in the file itself; just remember the choice.
+      if (s.mode === "direct") {
+        const updated = (await deps.plex.item(s.token, s.ratingKey)) ?? item;
+        return { id: s.id, mode: s.mode, tracks: tracksOf(updated) };
+      }
       // Report where we are, then replace the stream with one using the new tracks.
       await deps.plex.timeline(s.token, s.plexSession, s.ratingKey, "paused", timeMs, s.durationMs).catch(() => undefined);
       await end(s);

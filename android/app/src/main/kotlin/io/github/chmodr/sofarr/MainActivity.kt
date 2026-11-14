@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
@@ -95,7 +96,11 @@ fun SofarrTheme(content: @Composable () -> Unit) {
     }
     MaterialTheme(colorScheme = darkColorScheme(primary = Tokens.Accent, background = Tokens.Bg)) {
         // Text outside a tv-material Surface takes LocalContentColor, which defaults to black.
-        CompositionLocalProvider(LocalContentColor provides Tokens.Text) {
+        // Line height relative to the text (the web's 1.4), not the TV toolkit's fixed one for large type.
+        CompositionLocalProvider(
+            LocalContentColor provides Tokens.Text,
+            LocalTextStyle provides LocalTextStyle.current.merge(TextStyle(lineHeight = 1.4.em)),
+        ) {
             Box(Modifier.fillMaxSize().background(Tokens.Bg)) { content() }
         }
     }
