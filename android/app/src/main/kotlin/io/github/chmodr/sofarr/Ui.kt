@@ -265,12 +265,13 @@ class PinToStart(private val leadingPx: Float) : BringIntoViewSpec {
  * Compose's default on TV moves the focused item to about a third of the way down.
  */
 @OptIn(ExperimentalFoundationApi::class)
-class KeepVisible(private val marginPx: Float) : BringIntoViewSpec {
+class KeepVisible(private val marginPx: Float, private val topInsetPx: Float = 0f) : BringIntoViewSpec {
+    // `topInsetPx`: the part of the list covered by something drawn over it (a header).
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
         val end = offset + size
         return when {
-            offset >= 0 && end <= containerSize -> 0f
-            offset < 0 || size + 2 * marginPx > containerSize -> offset - marginPx
+            offset >= topInsetPx && end <= containerSize -> 0f
+            offset < topInsetPx || size + 2 * marginPx > containerSize - topInsetPx -> offset - topInsetPx - marginPx
             else -> end - containerSize + marginPx
         }
     }

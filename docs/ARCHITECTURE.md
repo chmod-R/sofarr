@@ -236,7 +236,8 @@ it:
 ## Android TV app
 
 The client, in `android/`: server address, Plex sign-in and profiles, Home, title pages
-with requests, search, and the player (tracks, up next). Not yet: My Library.
+with requests, search, My Library (the web's second tab: sort switch remembered on the
+device, then TV Shows and Movies grids), and the player (tracks, up next).
 
 - **Look:** the web UI's design, carried over (`Ui.kt` holds its tokens). The web sizes in
   rem with the root at ~1.05vw, so on a 1080p TV 1 rem is about 10 dp of Android TV's

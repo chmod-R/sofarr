@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -49,6 +50,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -112,6 +118,9 @@ fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Uni
     var shown by remember { mutableStateOf<RowItem?>(null) }
     var profile by remember { mutableStateOf<Profile?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf("home") }
+    val libraryGrid = rememberLazyGridState()
+    val libraryEntry = remember { FocusRequester() }
     var reload by remember { mutableIntStateOf(0) }
     var wantFocus by remember { mutableStateOf(false) }
     val firstCard = remember { FocusRequester() }
@@ -148,47 +157,57 @@ fun HomeScreen(api: SofarrApi, onSwitchProfile: () -> Unit, onSignOut: () -> Uni
     val hero = shown?.let { s -> rows?.firstNotNullOfOrNull { r -> r.items.firstOrNull { it.id == s.id } } ?: s }
 
     BackHandler(enabled = menuOpen) { menuOpen = false }
+    // Back from My Library goes to Home (as on the web).
+    BackHandler(enabled = !menuOpen && tab == "library") { tab = "home" }
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
-        if (hero != null) Hero(api, hero)
+        if (tab == "library") {
+            LibraryScreen(api, reload, libraryGrid, libraryEntry, topPadding = 58.dp, onOpen = { openItem(context, it, open::launch) })
+        } else {
+            if (hero != null) Hero(api, hero)
 
-        // Rows scroll in their own area under the hero: the selected row moves to the top. The focused
-        // card is what asks to be shown, so leave room above it for its row's title.
-        val rowHead = with(density) { RowHead.toPx() }
-        CompositionLocalProvider(LocalBringIntoViewSpec provides remember(rowHead) { PinToStart(rowHead) }) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(top = HeroHeight),
-                contentPadding = PaddingValues(top = 4.dp, bottom = 380.dp),
-            ) {
-                error?.let { msg ->
-                    item {
-                        Column(Modifier.padding(horizontal = Tokens.Gutter, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(msg, color = Tokens.Text, fontSize = 10.sp)
-                            SofarrButton("Try again", { reload++ }, kind = ButtonKind.Primary)
+            // Rows scroll in their own area under the hero: the selected row moves to the top. The focused
+            // card is what asks to be shown, so leave room above it for its row's title.
+            val rowHead = with(density) { RowHead.toPx() }
+            CompositionLocalProvider(LocalBringIntoViewSpec provides remember(rowHead) { PinToStart(rowHead) }) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(top = HeroHeight),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 380.dp),
+                ) {
+                    error?.let { msg ->
+                        item {
+                            Column(Modifier.padding(horizontal = Tokens.Gutter, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(msg, color = Tokens.Text, fontSize = 10.sp)
+                                SofarrButton("Try again", { reload++ }, kind = ButtonKind.Primary)
+                            }
+                        }
+                    }
+                    itemsIndexed(rows.orEmpty(), key = { _, r -> r.id }) { rowIndex, row ->
+                        val active = selected?.first == row.id || (selected == null && rowIndex == 0)
+                        HomeRow(
+                            api = api,
+                            row = row,
+                            active = active,
+                            firstCard = if (rowIndex == 0) firstCard else null,
+                            onFocused = { selected = row.id to it },
+                            onOpen = { openItem(context, it, open::launch) },
+                        )
+                    }
+                    if (warnings.isNotEmpty()) {
+                        item {
+                            Text("Some rows are missing: ${warnings.joinToString("; ")}", color = Tokens.Muted, fontSize = 8.5.sp,
+                                modifier = Modifier.padding(horizontal = Tokens.Gutter, vertical = 10.dp))
                         }
                     }
                 }
-                itemsIndexed(rows.orEmpty(), key = { _, r -> r.id }) { rowIndex, row ->
-                    val active = selected?.first == row.id || (selected == null && rowIndex == 0)
-                    HomeRow(
-                        api = api,
-                        row = row,
-                        active = active,
-                        firstCard = if (rowIndex == 0) firstCard else null,
-                        onFocused = { selected = row.id to it },
-                        onOpen = { openItem(context, it, open::launch) },
-                    )
-                }
-                if (warnings.isNotEmpty()) {
-                    item {
-                        Text("Some rows are missing: ${warnings.joinToString("; ")}", color = Tokens.Muted, fontSize = 8.5.sp,
-                            modifier = Modifier.padding(horizontal = Tokens.Gutter, vertical = 10.dp))
-                    }
-                }
             }
+
         }
 
-        Header(api, profile, menuOpen, onToggleMenu = { menuOpen = !menuOpen }, onSwitchProfile = {
+        // Over the artwork the header has a shade; on My Library it turns solid once the grid scrolls under it.
+        val solid = tab == "library" && (libraryGrid.firstVisibleItemIndex > 0 || libraryGrid.firstVisibleItemScrollOffset > 0)
+        // Down from the header goes into the page (Compose's own search doesn't get there from the overlay).
+        Header(api, profile, menuOpen, tab, solid, down = if (tab == "library") libraryEntry else firstCard, onTab = { tab = it }, onToggleMenu = { menuOpen = !menuOpen }, onSwitchProfile = {
             menuOpen = false
             onSwitchProfile()
         }, onSignOut = {
@@ -308,18 +327,32 @@ private fun Header(
     api: SofarrApi,
     profile: Profile?,
     menuOpen: Boolean,
+    tab: String,
+    solid: Boolean,
+    down: FocusRequester,
+    onTab: (String) -> Unit,
     onToggleMenu: () -> Unit,
     onSwitchProfile: () -> Unit,
     onSignOut: () -> Unit,
 ) {
+    val shade by animateColorAsState(if (solid) Tokens.Bg else Color.Transparent, tween(250), label = "header")
     Box(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth()
+                .onPreviewKeyEvent { e ->
+                    e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown && runCatching { down.requestFocus() }.getOrDefault(false)
+                }
+                .background(shade)
                 .background(Brush.verticalGradient(listOf(Color(0xCC08090C), Color.Transparent)))
                 .padding(horizontal = Tokens.Gutter, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Sofarr", color = Tokens.Accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.02.em)
+            // .tabs: switching keeps focus on the tab, like the web.
+            Row(Modifier.padding(start = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TabButton("Home", current = tab == "home", onClick = { onTab("home") })
+                TabButton("My Library", current = tab == "library", onClick = { onTab("library") })
+            }
             Spacer(Modifier.weight(1f))
             val context = LocalContext.current
             FocusBox({ context.startActivity(Intent(context, SearchActivity::class.java)) }, shape = RoundedCornerShape(50), radius = 50.dp) { focused ->

@@ -180,6 +180,8 @@ data class RowItem(
     val download: Download? = null,
     val availableFrom: String? = null,
     val fresh: String? = null,
+    /** My Library: "YYYY-MM-DD" release / premiere date, for sorting. */
+    val released: String? = null,
 ) {
     /** What Play starts: the resume target, else the library item (a show plays its next-up episode). */
     val playKey: String? get() = resume?.plexKey ?: plexKey.takeIf { status == "owned" }
@@ -241,6 +243,7 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
     suspend fun home(): Home = get("/api/home", Home.serializer())
     suspend fun title(mediaType: String, tmdbId: Int): TitleDetail = get("/api/titles/$mediaType/$tmdbId", TitleDetail.serializer())
     suspend fun logo(mediaType: String, tmdbId: Int): String? = get("/api/titles/$mediaType/$tmdbId/logo", Logo.serializer()).logo
+    suspend fun library(): Home = get("/api/library", Home.serializer())
     suspend fun search(q: String): List<RowItem> =
         get("/api/search?q=${java.net.URLEncoder.encode(q, "UTF-8")}", Results.serializer()).results
     suspend fun similar(mediaType: String, tmdbId: Int): List<RowItem> =

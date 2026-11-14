@@ -238,8 +238,11 @@ private fun TitleBody(
         // Logo, else the name.
         val logo = d?.logo?.let(api::resolve)
         if (logo != null) {
-            AsyncImage(model = logo, contentDescription = d.title, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart,
-                modifier = Modifier.widthIn(max = 300.dp).heightIn(max = 119.dp))
+            // A fixed slot: the logo loads after the page, and mustn't push what's focused down.
+            Box(Modifier.height(119.dp), contentAlignment = Alignment.BottomStart) {
+                AsyncImage(model = logo, contentDescription = d.title, contentScale = ContentScale.Fit, alignment = Alignment.BottomStart,
+                    modifier = Modifier.widthIn(max = 300.dp).heightIn(max = 119.dp))
+            }
         } else {
             Text(d?.title ?: name, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 1.05.em, color = Tokens.Text)
         }
