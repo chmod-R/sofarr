@@ -220,6 +220,8 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
     suspend fun home(): Home = get("/api/home", Home.serializer())
     suspend fun title(mediaType: String, tmdbId: Int): TitleDetail = get("/api/titles/$mediaType/$tmdbId", TitleDetail.serializer())
     suspend fun logo(mediaType: String, tmdbId: Int): String? = get("/api/titles/$mediaType/$tmdbId/logo", Logo.serializer()).logo
+    suspend fun search(q: String): List<RowItem> =
+        get("/api/search?q=${java.net.URLEncoder.encode(q, "UTF-8")}", Results.serializer()).results
     suspend fun similar(mediaType: String, tmdbId: Int): List<RowItem> =
         get("/api/titles/$mediaType/$tmdbId/similar", Results.serializer()).results
     suspend fun episodes(tmdbId: Int, season: Int, numbering: String): SeasonEpisodes =

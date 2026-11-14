@@ -27,6 +27,12 @@
         </activity>
 
         <activity
+            android:name=".SearchActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|uiMode" />
+
+        <activity
             android:name=".TitleActivity"
             android:exported="false"
             android:screenOrientation="landscape"

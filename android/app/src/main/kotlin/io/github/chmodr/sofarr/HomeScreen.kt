@@ -321,6 +321,13 @@ private fun Header(
         ) {
             Text("Sofarr", color = Tokens.Accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.02.em)
             Spacer(Modifier.weight(1f))
+            val context = LocalContext.current
+            FocusBox({ context.startActivity(Intent(context, SearchActivity::class.java)) }, shape = RoundedCornerShape(50), radius = 50.dp) { focused ->
+                Box(Modifier.background(if (focused) Tokens.Text else Color.Transparent).padding(5.5.dp)) {
+                    SearchIcon(if (focused) Tokens.Bg else Tokens.Text)
+                }
+            }
+            Spacer(Modifier.width(6.dp))
             FocusBox(onToggleMenu, shape = RoundedCornerShape(6.dp), radius = 6.dp) { focused ->
                 Box(Modifier.background(if (menuOpen && !focused) Color.White.copy(alpha = 0.14f) else Color.Transparent).padding(3.dp)) {
                     Avatar(api, profile, 21.dp)
