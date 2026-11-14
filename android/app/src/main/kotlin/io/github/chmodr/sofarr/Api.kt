@@ -81,31 +81,105 @@ class PrefsCookieJar(context: Context) : CookieJar {
     }
 }
 
-class ApiException(val code: Int, val error: String?) : Exception("HTTP $code${error?.let { ": $it" } ?: ""}")
+class ApiException(val code: Int, val error: String?, val detail: String? = null) : Exception("HTTP $code${error?.let { ": $it" } ?: ""}")
 
 @Serializable data class Health(val status: String, val version: String)
 @Serializable data class Session(val signedIn: Boolean, val profile: Profile? = null)
+@Serializable data class Logo(val logo: String? = null)
+@Serializable data class Results(val results: List<RowItem> = emptyList())
+
+@Serializable
+data class SeasonInfo(
+    val number: Int,
+    val tmdbNumber: Int? = null,
+    val name: String,
+    val episodeCount: Int = 0,
+    val airDate: String? = null,
+    val inPlex: Int = 0,
+    val watched: Int = 0,
+    val status: String,
+)
+
+@Serializable
+data class TitleDetail(
+    val id: String,
+    val mediaType: String,
+    val tmdbId: Int,
+    val title: String,
+    val year: Int? = null,
+    val overview: String = "",
+    val backdrop: String? = null,
+    val rating: Double? = null,
+    val status: String,
+    val plexKey: String? = null,
+    val download: Download? = null,
+    val availableFrom: String? = null,
+    val tagline: String? = null,
+    val genres: List<String> = emptyList(),
+    val runtime: Int? = null,
+    val trailerYoutubeKey: String? = null,
+    val logo: String? = null,
+    val certification: String? = null,
+    val cast: List<String> = emptyList(),
+    val seasons: List<SeasonInfo>? = null,
+    val seasonNumbering: String? = null,
+) {
+    /** Requests and episode lists name seasons in this numbering. */
+    val numbering: String get() = if (seasonNumbering == "tmdb") "tmdb" else "sonarr"
+}
+
+@Serializable data class EpisodeProgress(val percent: Int = 0, val remainingMs: Long = 0)
+
+@Serializable
+data class EpisodeInfo(
+    val number: Int,
+    val title: String,
+    val airDate: String? = null,
+    val overview: String = "",
+    val still: String? = null,
+    val runtime: Int? = null,
+    val status: String,
+    val plexKey: String? = null,
+    val watched: Boolean = false,
+    val progress: EpisodeProgress? = null,
+)
+
+@Serializable data class SeasonEpisodes(val season: Int, val episodes: List<EpisodeInfo> = emptyList())
+@Serializable data class RequestResult(val result: String, val title: TitleDetail? = null)
 @Serializable data class Pin(val code: String, val linkUrl: String, val qrUrl: String? = null)
 @Serializable data class PinStatus(val status: String, val reason: String? = null)
 @Serializable data class Profile(val uuid: String, val title: String, val thumb: String? = null, val isProtected: Boolean = false)
 @Serializable data class Profiles(val profiles: List<Profile>)
-@Serializable data class Home(val rows: List<Row>)
+@Serializable data class Home(val rows: List<Row>, val warnings: List<String> = emptyList())
 @Serializable data class Row(val id: String, val title: String, val ranked: Boolean = false, val items: List<RowItem>)
 @Serializable data class Resume(val plexKey: String, val label: String? = null, val percent: Int = 0)
 
 @Serializable
+data class Download(
+    val percent: Double = 0.0,
+    val timeLeft: String? = null,
+    val state: String = "",
+    val speedBps: Double? = null,
+)
+
+/** A title anywhere in the app (rows, search, More Like This). */
+@Serializable
 data class RowItem(
     val id: String,
     val mediaType: String,
+    val tmdbId: Int,
     val title: String,
     val year: Int? = null,
     val overview: String = "",
     val poster: String? = null,
     val backdrop: String? = null,
+    val rating: Double? = null,
     val status: String,
     val plexKey: String? = null,
     val resume: Resume? = null,
+    val download: Download? = null,
     val availableFrom: String? = null,
+    val fresh: String? = null,
 ) {
     /** What Play starts: the resume target, else the library item (a show plays its next-up episode). */
     val playKey: String? get() = resume?.plexKey ?: plexKey.takeIf { status == "owned" }
@@ -144,6 +218,26 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
     suspend fun startPin(): Pin = post("/api/auth/pin", null, Pin.serializer())
     suspend fun profiles(): List<Profile> = get("/api/profiles", Profiles.serializer()).profiles
     suspend fun home(): Home = get("/api/home", Home.serializer())
+    suspend fun title(mediaType: String, tmdbId: Int): TitleDetail = get("/api/titles/$mediaType/$tmdbId", TitleDetail.serializer())
+    suspend fun logo(mediaType: String, tmdbId: Int): String? = get("/api/titles/$mediaType/$tmdbId/logo", Logo.serializer()).logo
+    suspend fun similar(mediaType: String, tmdbId: Int): List<RowItem> =
+        get("/api/titles/$mediaType/$tmdbId/similar", Results.serializer()).results
+    suspend fun episodes(tmdbId: Int, season: Int, numbering: String): SeasonEpisodes =
+        get("/api/titles/tv/$tmdbId/seasons/$season?numbering=$numbering", SeasonEpisodes.serializer())
+
+    /** "Get it": a movie, whole seasons, or single episodes of one season. */
+    suspend fun request(detail: TitleDetail, seasons: List<Int> = emptyList(), episodes: List<Int>? = null): RequestResult {
+        val body = buildJsonObject {
+            put("mediaType", detail.mediaType)
+            put("tmdbId", detail.tmdbId)
+            if (detail.mediaType == "tv") {
+                put("seasons", kotlinx.serialization.json.JsonArray(seasons.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                if (episodes != null) put("episodes", kotlinx.serialization.json.JsonArray(episodes.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                put("seasonNumbering", detail.numbering)
+            }
+        }
+        return post("/api/requests", body, RequestResult.serializer())
+    }
 
     /** Poll the sign-in code. Plex's answer is in the body whatever the status code. */
     suspend fun pollPin(): PinStatus = withContext(Dispatchers.IO) {
@@ -199,14 +293,14 @@ class SofarrApi(val base: HttpUrl, private val client: OkHttpClient) {
         client.newCall(request).execute().use { response ->
             val text = response.body.string()
             if (!response.isSuccessful) {
-                val error = runCatching { json.decodeFromString(ErrorBody.serializer(), text).error }.getOrNull()
-                throw ApiException(response.code, error)
+                val err = runCatching { json.decodeFromString(ErrorBody.serializer(), text) }.getOrNull()
+                throw ApiException(response.code, err?.error, err?.detail)
             }
             json.decodeFromString(serializer, text)
         }
     }
 
-    @Serializable private data class ErrorBody(val error: String? = null)
+    @Serializable private data class ErrorBody(val error: String? = null, val detail: String? = null)
 
     companion object {
         val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
