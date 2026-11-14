@@ -22,6 +22,12 @@ android {
         versionName = sofarrVersion
     }
 
+    buildTypes {
+        // Debug builds let adb open the player on any title: am start -n <app>/.PlayerActivity --es plexKey <key>
+        getByName("debug") { manifestPlaceholders["playerExported"] = "true" }
+        getByName("release") { manifestPlaceholders["playerExported"] = "false" }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

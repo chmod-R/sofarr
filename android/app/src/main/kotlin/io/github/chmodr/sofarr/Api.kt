@@ -123,7 +123,11 @@ data class PlayStart(
     val durationMs: Long = 0,
     val startMs: Long = 0,
     val media: PlayMedia? = null,
+    val tracks: PlayTracks? = null,
 )
+
+@Serializable data class PlayTracks(val audio: List<PlayTrack> = emptyList())
+@Serializable data class PlayTrack(val id: Int, val label: String, val language: String? = null, val selected: Boolean = false)
 
 @Serializable data class PlayMedia(val container: String? = null, val videoCodec: String? = null, val audioCodec: String? = null)
 

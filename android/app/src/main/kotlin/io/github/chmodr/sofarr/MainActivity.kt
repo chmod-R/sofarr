@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -278,10 +279,13 @@ private fun SignIn(api: SofarrApi, onSignedIn: () -> Unit) {
                     Text(p.code, fontSize = 44.sp, letterSpacing = 6.sp)
                 }
                 p.qrUrl?.let {
+                    // Plex's QR is white on transparent (made for dark screens): draw it black on white,
+                    // with a quiet zone, which every phone camera reads.
                     AsyncImage(
                         model = it,
                         contentDescription = "QR code for plex.tv/link",
-                        modifier = Modifier.size(150.dp).clip(RoundedCornerShape(8.dp)).background(Color.White),
+                        colorFilter = ColorFilter.tint(Color.Black),
+                        modifier = Modifier.size(150.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(10.dp),
                     )
                 }
             }

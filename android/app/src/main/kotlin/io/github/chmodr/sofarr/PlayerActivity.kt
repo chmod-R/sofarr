@@ -15,6 +15,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -36,6 +37,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var player: ExoPlayer
     private var session: PlayStart? = null
     private var fellBack = false
+    private var audioChosen = false
     private var heartbeat: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,13 +82,13 @@ class PlayerActivity : ComponentActivity() {
 
     private val listener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
-            if (session?.mode != "direct" || fellBack) return
-            // ExoPlayer quietly skips tracks it can't decode; with no usable video or audio, convert instead.
-            val missing = listOf(C.TRACK_TYPE_VIDEO to "video", C.TRACK_TYPE_AUDIO to "audio").filter { (type, _) ->
-                val groups = tracks.groups.filter { it.type == type }
-                groups.isNotEmpty() && groups.none { it.isSupported }
-            }
-            if (missing.isNotEmpty()) fallBack("can't decode ${missing.joinToString { it.second }}")
+            val s = session ?: return
+            if (s.mode != "direct" || fellBack) return
+            // ExoPlayer quietly skips tracks it can't decode: check the video, and that the audio
+            // track chosen in Plex (not just any track) can play. Otherwise convert instead.
+            val video = tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
+            if (video.isNotEmpty() && video.none { it.isSupported }) return fallBack("can't decode the video")
+            if (!audioChosen) chooseAudio(s, tracks)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -114,6 +116,33 @@ class PlayerActivity : ComponentActivity() {
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED) finish()
         }
+    }
+
+    /**
+     * Play the audio track selected in Plex (per profile, as Plex's own apps do). Plex lists a
+     * file's audio streams in file order, as ExoPlayer does, so they line up by position.
+     */
+    private fun chooseAudio(s: PlayStart, tracks: Tracks) {
+        val groups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        if (groups.isEmpty()) return
+        audioChosen = true
+        val plexAudio = s.tracks?.audio.orEmpty()
+        val wanted = plexAudio.indexOfFirst { it.selected }.takeIf { it >= 0 } ?: 0
+        val group = if (groups.size == plexAudio.size) groups[wanted] else null
+        if (group == null) {
+            // Can't line them up: accept ExoPlayer's choice if it found anything playable.
+            if (groups.none { it.isSupported }) fallBack("can't decode the audio")
+            return
+        }
+        if (!group.isTrackSupported(0)) {
+            return fallBack("can't decode audio track \"${plexAudio[wanted].label}\" (${group.getTrackFormat(0).sampleMimeType})")
+        }
+        if (!group.isSelected) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                .build()
+        }
+        Log.i(TAG, "audio: ${plexAudio[wanted].label} (${group.getTrackFormat(0).sampleMimeType})")
     }
 
     /** Switch to a Plex transcode at the current position. */

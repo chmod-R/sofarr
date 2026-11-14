@@ -28,7 +28,7 @@
 
         <activity
             android:name=".PlayerActivity"
-            android:exported="false"
+            android:exported="${playerExported}"
             android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|uiMode" />
     </application>
