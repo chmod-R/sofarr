@@ -4,6 +4,10 @@ A sofa-friendly, Netflix-like front end for a self-hosted
 **Plex + Radarr + Sonarr** setup. Browse what to watch, get anything you don't have
 yet, and play it, all in one app you can drive with a TV remote.
 
+> **Direction:** Sofarr is becoming a native app for the **Google TV Streamer**
+> (`android/`, early days), backed by the Sofarr server below. The web UI described here
+> is being replaced and gets no new work.
+
 ## What it does
 
 - **Browse.** Rows like Continue Watching, Because you watched…, Trending Movies and
@@ -129,6 +133,9 @@ scripts/npm run build -w web       # web UI → web/dist (served by the backend)
 docker build -t sofarr:dev .
 docker run --rm -p 5656:5656 --env-file .env -v ./data:/data sofarr:dev
 ```
+
+The Android TV app builds in Docker too: see `android/run.sh` and
+[Android TV app](docs/ARCHITECTURE.md#android-tv-app).
 
 How it works and why: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

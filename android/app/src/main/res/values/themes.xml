@@ -1,0 +1,8 @@
+<resources>
+    <color name="sofarr_background">#FF0E0F13</color>
+    <color name="sofarr_accent">#FFF0A640</color>
+    <style name="Theme.Sofarr" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/sofarr_background</item>
+        <item name="android:colorAccent">@color/sofarr_accent</item>
+    </style>
+</resources>

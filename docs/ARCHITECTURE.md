@@ -5,8 +5,8 @@ How Sofarr works and why it's built this way. For contributors; users want the
 
 ## Goal
 
-One TV-friendly app to **browse → request → watch**. Sofarr plays video itself, using
-Plex as the stream source, so you never switch to another app.
+One app on the **Google TV Streamer** to **browse → request → watch**. Sofarr plays
+video itself, using Plex as the stream source, so you never switch to another app.
 
 Without it, a typical Plex + *arr household picks something to watch somewhere else,
 requests it in Radarr/Sonarr (often from a phone), then switches to Plex on the TV to
@@ -22,9 +22,13 @@ watch. The existing pieces each cover only part of that:
 
 - **One app all the way through.** Browsing, requesting and playback happen in Sofarr;
   never hand off to the Plex app.
-- **Web first.** A browser UI that works on a TV, laptop or phone, built so its logic
-  can carry over to a native TV app later.
-- **One container.** Easy to self-host next to an existing stack; state in one SQLite file.
+- **Google TV only.** The client is a native Android TV app for the Google TV Streamer
+  (Kotlin, Compose for TV, Media3). No other devices are targeted. The web UI predates
+  this decision and is kept only until the app replaces it; it gets no new work.
+- **Native playback.** The app's player plays files as Plex has them wherever the
+  Streamer can decode them, and only asks Plex to transcode what it can't.
+- **One server container.** The backend is easy to self-host next to an existing stack,
+  with state in one SQLite file. The app is a client of its API.
 - **Plex is the source of truth** for identity, profiles, library and watch state; the
   *arr apps for what's wanted and downloading. Sofarr stores only what those don't
   (sessions, request history).
@@ -34,10 +38,10 @@ watch. The existing pieces each cover only part of that:
 ## Components
 
 ```
- Browser (TV / laptop / phone)
-   │  same-origin HTTP: JSON API, HLS playlists and segments, static UI
+ Sofarr Android TV app (Google TV Streamer)
+   │  HTTP on the home network: JSON API, video
    ▼
- Sofarr (one container: Fastify backend + built React UI, SQLite)
+ Sofarr server (one container: Fastify backend, SQLite; still serves the legacy web UI)
    ├─ plex.tv ........ sign-in (PIN), Plex Home users, server access tokens
    ├─ Plex server .... library, watch state, artwork, universal transcoder (HLS)
    ├─ Radarr/Sonarr .. library, queue, add/monitor/search ("Get it")
@@ -45,7 +49,8 @@ watch. The existing pieces each cover only part of that:
    └─ TMDb ........... trending, recommendations, search, details, logos, release dates
 ```
 
-- **Single container.** The backend serves the built web UI. State is one SQLite file.
+- **Single server container.** State is one SQLite file. It also serves the legacy web UI
+  until the app replaces it.
 - **Every upstream is a URL in config.** No assumptions about how they're networked
   (for example, *arr apps behind a VPN container are reached at whatever host:port works).
 - **All upstreams are optional at boot.** `/api/health/upstreams` (admin) shows what's
@@ -53,11 +58,12 @@ watch. The existing pieces each cover only part of that:
 
 | Area | Choice | Why |
 |---|---|---|
-| Language | TypeScript, backend and UI | Shared types; UI logic can carry over to a future React Native TV app. |
+| App | Kotlin, [Compose for TV](https://developer.android.com/training/tv/playback/compose) (`androidx.tv:tv-material`), Media3/ExoPlayer, OkHttp, kotlinx.serialization | Google's own TV toolkit, so focus, rows and motion feel like the rest of Google TV; ExoPlayer plays far more formats than a browser. |
+| App build | Gradle (wrapper), Android SDK in a Docker image (`android/Dockerfile`) | No Android tooling on the host; see [Android TV app](#android-tv-app). |
+| Language | TypeScript, backend (and legacy web UI) | |
 | Backend | Node 24 LTS, Fastify 5, zod 4 | Small, fast; typed config and request validation. |
 | Database | `node:sqlite` (built into Node), WAL, append-only migrations via `user_version` | No native add-on to compile; npm blocks install scripts by default. |
-| UI | React 19, Vite, plain CSS, [Norigin Spatial Navigation](https://github.com/NoriginMedia/Norigin-Spatial-Navigation) | D-pad/arrow-key navigation for TVs; mouse and touch work too. Plain CSS keeps TV browsers fast and focus styling fully controllable. |
-| Non-Safari playback | [hls.js](https://github.com/video-dev/hls.js) (Apache-2.0), lazy-loaded | Safari plays HLS natively and never downloads it. |
+| Legacy web UI | React 19, Vite, plain CSS, [Norigin Spatial Navigation](https://github.com/NoriginMedia/Norigin-Spatial-Navigation), [hls.js](https://github.com/video-dev/hls.js) | Being replaced by the app. |
 | Config | `SOFARR_*` environment variables | Container-native. A settings UI may come later. |
 | License | MIT | |
 
@@ -222,7 +228,41 @@ it:
   every subtitle type (SRT, ASS, PGS, VobSub, DVB). Instant text subtitles via local
   extraction are [planned](https://github.com/chmod-R/sofarr/issues/4).
 
-## Web UI
+## Android TV app
+
+The client, in `android/`. It's at the very start: it asks for the server's address
+on first launch and checks `/api/health`. Sign-in, Home and native playback come next.
+
+- **Target:** the Google TV Streamer only (`minSdk` 34, Android TV 14). The manifest
+  requires `android.software.leanback`, so it appears in the TV launcher (with a 16:9
+  banner) and nowhere else.
+- **Server address:** entered at first launch (`host:port` or a URL), checked against
+  `/api/health`, then stored in the app's preferences. Nothing about any particular
+  server is built in. Cleartext HTTP is allowed for every host, since Sofarr and Plex are
+  plain HTTP on the home network and the host isn't known at build time.
+- **Version:** one version for the whole project. Gradle reads `server/package.json`:
+  `versionName` is that version and `versionCode` is `major×10000 + minor×100 + patch`.
+- **Build and install** with `android/run.sh`, which runs everything in Docker:
+
+  ```sh
+  android/run.sh image                       # build env: JDK 21, Android SDK, adb
+  android/run.sh build                       # debug APK
+  android/run.sh pair HOST:PORT CODE         # once: Wireless debugging → pair with code
+  SOFARR_TV=HOST:PORT android/run.sh install # Wireless debugging → IP address & port
+  SOFARR_TV=HOST:PORT android/run.sh adb logcat
+  ```
+
+  Gradle downloads, the debug signing key and the adb pairing key are kept in the Docker
+  volume `sofarr-android-cache`. If it's lost, pair again, and uninstall the app before
+  the next install (the signing key changes). Builds use one JVM with the Kotlin compiler
+  in-process, so they fit on a small server.
+- **Playback (next):** Media3/ExoPlayer. The server tells the app what to play; the app
+  plays the file directly where the Streamer can decode it and falls back to a Plex
+  transcode for the rest.
+
+## Legacy web UI
+
+Kept only until the Android TV app replaces it; no new work goes into it.
 
 - **Header tabs:** Home and My Library share one screen component. Switching tabs
   keeps focus on the tab; Back from My Library returns to Home.
@@ -298,6 +338,6 @@ it:
 
 ## Not built yet
 
-See [GitHub Issues](https://github.com/chmod-R/sofarr/issues). Larger directions: a native TV app (React Native tvOS or a
-Google TV wrapper), friends with shared access signing in, request approvals/quotas,
-and remote access.
+See [GitHub Issues](https://github.com/chmod-R/sofarr/issues). Larger directions: the Android TV app (sign-in, Home, native
+playback, then the rest of the web UI's features, then retiring the web UI), friends
+with shared access signing in, request approvals/quotas, and remote access.

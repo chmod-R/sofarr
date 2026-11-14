@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sofarr and Plex are reached over plain HTTP on the home network. The server address
+     is entered at first launch, so cleartext can't be limited to a known host. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

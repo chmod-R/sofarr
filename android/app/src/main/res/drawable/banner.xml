@@ -1,0 +1,11 @@
+<!-- Home screen banner (16:9). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
+    <path android:pathData="M0,0h320v180h-320z" android:fillColor="@color/sofarr_background" />
+    <group android:translateX="96" android:translateY="18" android:scaleX="2" android:scaleY="2">
+        <path android:pathData="M14,40v-8a6,6 0 0,1 6,-6h24a6,6 0 0,1 6,6v8M10,34a4,4 0 0,1 8,0v8h28v-8a4,4 0 0,1 8,0v12H10z" android:fillColor="#00000000"
+            android:strokeColor="@color/sofarr_accent" android:strokeWidth="4"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>
